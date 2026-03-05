@@ -96,14 +96,6 @@ npm run build
 npm run preview
 ```
 
-### Alternative: Batch File
-If just has issues with npm PATH, use the included `run-dev.bat`:
-```bash
-run-dev.bat backend     # Start Django
-run-dev.bat frontend    # Start Vite
-run-dev.bat migrate     # Run migrations
-```
-
 ## Usage
 
 - Backend API runs on `http://localhost:8000`
