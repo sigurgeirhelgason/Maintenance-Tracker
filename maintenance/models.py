@@ -1,0 +1,114 @@
+from django.db import models
+from django.core.validators import MinValueValidator
+import os
+
+class Property(models.Model):
+    name = models.CharField(max_length=255)
+    address = models.TextField()
+    num_floors = models.IntegerField(default=1, validators=[MinValueValidator(1)])
+    has_garden = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.name
+
+class Area(models.Model):
+    ROOM_TYPE_CHOICES = [
+        ('Living room', 'Living room'),
+        ('Bed room', 'Bed room'),
+        ('Storage', 'Storage'),
+        ('Kitchen', 'Kitchen'),
+        ('Bathroom', 'Bathroom'),
+        ('Office', 'Office'),
+        ('Laundry', 'Laundry'),
+        ('Dining room', 'Dining room'),
+        ('Garden', 'Garden'),
+    ]
+    
+    property = models.ForeignKey(Property, on_delete=models.CASCADE, related_name='areas')
+    type = models.CharField(max_length=50, choices=ROOM_TYPE_CHOICES, default='Living room')
+    name = models.CharField(max_length=255, blank=True, null=True)  # Optional custom name
+    floor = models.IntegerField(default=1, validators=[MinValueValidator(0)])  # Floor 0 = garden, 1+ = regular floors
+    description = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['floor', 'type', 'name']
+
+    def __str__(self):
+        if self.name:
+            return f"{self.type} - {self.name} (Floor {self.floor})"
+        return f"{self.type} (Floor {self.floor})"
+
+class TaskType(models.Model):
+    CATEGORY_CHOICES = [
+        ('plumbing', 'Plumbing'),
+        ('flooring', 'Flooring'),
+        ('electrical', 'Electrical'),
+        ('heating', 'Heating'),
+        ('painting', 'Painting'),
+        ('maintenance', 'General Maintenance'),
+        ('custom', 'Custom'),
+    ]
+    name = models.CharField(max_length=255)
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES)
+    is_predefined = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-is_predefined', 'name']
+
+    def __str__(self):
+        return self.name
+
+class Vendor(models.Model):
+    name = models.CharField(max_length=255)
+    contact_person = models.CharField(max_length=255, blank=True)
+    phone = models.CharField(max_length=20, blank=True)
+    email = models.EmailField(blank=True)
+    address = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.name
+
+class MaintenanceTask(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('in_progress', 'In Progress'),
+        ('finished', 'Finished'),
+    ]
+    property = models.ForeignKey(Property, on_delete=models.CASCADE, related_name='tasks', null=True, blank=True)
+    areas = models.ManyToManyField(Area, related_name='tasks', blank=True)
+    description = models.TextField()
+    task_type = models.ForeignKey(TaskType, on_delete=models.SET_NULL, null=True, blank=True)
+    vendor = models.ForeignKey(Vendor, on_delete=models.SET_NULL, null=True, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    estimated_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, validators=[MinValueValidator(0)])
+    final_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, validators=[MinValueValidator(0)])
+    currency = models.CharField(max_length=3, default='USD')
+    created_date = models.DateField(auto_now_add=True, null=True)
+    completed_date = models.DateField(null=True, blank=True)
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_date']
+
+    def __str__(self):
+        return f"{self.description} - {self.get_status_display()}"
+
+class Attachment(models.Model):
+    task = models.ForeignKey(MaintenanceTask, on_delete=models.CASCADE, related_name='attachments', null=True, blank=True)
+    file = models.FileField(upload_to='task_attachments/')
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Attachment for {self.task}"
+
+    def filename(self):
+        return os.path.basename(self.file.name)
