@@ -7,6 +7,7 @@ class Property(models.Model):
     address = models.TextField()
     num_floors = models.IntegerField(default=1, validators=[MinValueValidator(1)])
     has_garden = models.BooleanField(default=False)
+    image = models.ImageField(upload_to='property_images/', blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

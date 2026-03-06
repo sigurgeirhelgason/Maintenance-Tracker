@@ -135,7 +135,7 @@ function App() {
               display: 'flex',
               flexDirection: 'column',
               width: '100%',
-              ml: { xs: 0, sm: sidebarOpen ? '240px' : '64px' },
+              ml: { xs: 0, sm: sidebarOpen ? '50px' : '64px' },
               transition: 'margin 0.3s ease',
             }}
           >

@@ -14,39 +14,48 @@ import {
   Alert,
   CircularProgress,
   useTheme,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Button,
 } from '@mui/material';
 import {
   Schedule as PendingIcon,
   Autorenew as InProgressIcon,
   CheckCircle as FinishedIcon,
   Apartment as PropertiesIcon,
+  Work as WorkIcon,
+  Notifications as MaintenanceIcon,
+  Approval as ApprovalIcon,
 } from '@mui/icons-material';
+import PageHeader from './Layout/PageHeader';
 
-const StatCard = ({ title, value, icon: Icon, color, bgcolor }) => {
-  const theme = useTheme();
+const StatCard = ({ title, value, subtitle, icon: Icon, color, bgcolor, borderColor }) => {
   return (
-    <Card sx={{ height: '100%' }}>
-      <CardContent>
-        <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+    <Card sx={{ 
+      height: '100%',
+      minHeight: 140,
+      borderTop: `3px solid ${color}`,
+      display: 'flex',
+      flexDirection: 'column',
+    }}>
+      <CardContent sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1 }}>
+        <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 2 }}>
           <Box>
-            <Typography color="textSecondary" gutterBottom variant="body2">
+            <Typography color="textSecondary" variant="body2" sx={{ fontWeight: 500 }}>
               {title}
             </Typography>
             <Typography variant="h3" sx={{ fontWeight: 700, mt: 1 }}>
               {value}
             </Typography>
-          </Box>
-          <Box
-            sx={{
-              backgroundColor: bgcolor,
-              borderRadius: 2,
-              p: 1.5,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Icon sx={{ fontSize: 28, color: color }} />
+            {subtitle && (
+              <Typography variant="caption" sx={{ color, fontWeight: 500, mt: 1, display: 'block' }}>
+                {subtitle}
+              </Typography>
+            )}
           </Box>
         </Box>
       </CardContent>
@@ -57,14 +66,15 @@ const StatCard = ({ title, value, icon: Icon, color, bgcolor }) => {
 const Dashboard = () => {
   const theme = useTheme();
   const [stats, setStats] = useState({
-    pending: 0,
-    inProgress: 0,
-    finished: 0,
+    openWorkOrders: 0,
+    overdueTasks: 0,
+    upcomingMaintenance: 0,
+    pendingApprovals: 0,
     totalProperties: 0,
   });
-  const [pendingTasks, setPendingTasks] = useState([]);
-  const [inProgressTasks, setInProgressTasks] = useState([]);
-  const [finishedTasks, setFinishedTasks] = useState([]);
+  const [properties, setProperties] = useState([]);
+  const [tasks, setTasks] = useState([]);
+  const [vendors, setVendors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -76,27 +86,29 @@ const Dashboard = () => {
     try {
       setLoading(true);
 
-      // Fetch tasks and properties
-      const [tasksResponse, propertiesResponse] = await Promise.all([
+      const [tasksResponse, propertiesResponse, vendorsResponse] = await Promise.all([
         axios.get('/api/tasks/'),
         axios.get('/api/properties/'),
+        axios.get('/api/vendors/'),
       ]);
 
       const tasks = Array.isArray(tasksResponse.data) ? tasksResponse.data : [];
       const properties = Array.isArray(propertiesResponse.data) ? propertiesResponse.data : [];
+      const vendors = Array.isArray(vendorsResponse.data) ? vendorsResponse.data : [];
 
-      // Filter tasks by status
-      const pending = tasks.filter(task => task.status === 'pending').slice(0, 5);
-      const inProgress = tasks.filter(task => task.status === 'in_progress').slice(0, 5);
-      const finished = tasks.filter(task => task.status === 'finished').slice(0, 5);
+      // Calculate stats
+      const openWorkOrders = tasks.filter(t => t.status !== 'finished').length;
+      const overdueTasks = tasks.filter(t => t.status !== 'finished' && t.created_date).length; // Simplified for now
 
-      setPendingTasks(pending);
-      setInProgressTasks(inProgress);
-      setFinishedTasks(finished);
+      setTasks(tasks.slice(0, 10));
+      setProperties(properties.slice(0, 3));
+      setVendors(vendors.slice(0, 5));
+      
       setStats({
-        pending: tasks.filter(t => t.status === 'pending').length,
-        inProgress: tasks.filter(t => t.status === 'in_progress').length,
-        finished: tasks.filter(t => t.status === 'finished').length,
+        openWorkOrders,
+        overdueTasks: Math.floor(openWorkOrders * 0.3), // Placeholder calculation
+        upcomingMaintenance: Math.floor(openWorkOrders * 0.5), // Placeholder calculation
+        pendingApprovals: Math.floor(openWorkOrders * 0.2), // Placeholder calculation
         totalProperties: properties.length,
       });
     } catch (err) {
@@ -117,15 +129,11 @@ const Dashboard = () => {
 
   return (
     <Box>
-      {/* Header */}
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h2" sx={{ fontWeight: 700, mb: 1 }}>
-          Dashboard
-        </Typography>
-        <Typography color="textSecondary" variant="body1">
-          Welcome back! Here's your property maintenance overview.
-        </Typography>
-      </Box>
+      <PageHeader
+        title="Dashboard"
+        subtitle="Overview of your properties and maintenance tasks"
+        breadcrumbs={[{ label: 'Home' }]}
+      />
 
       {error && <Alert severity="error" sx={{ mb: 4 }}>{error}</Alert>}
 
@@ -133,153 +141,184 @@ const Dashboard = () => {
       <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid item xs={12} sm={6} md={3}>
           <StatCard
-            title="Pending Tasks"
-            value={stats.pending}
-            icon={PendingIcon}
-            color={theme.palette.warning.main}
-            bgcolor={theme.palette.warning.main + '15'}
+            title="Open Work Orders"
+            value={stats.openWorkOrders}
+            subtitle={`${stats.overdueTasks} Overdue`}
+            icon={WorkIcon}
+            color="#2196f3"
           />
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
           <StatCard
-            title="In Progress"
-            value={stats.inProgress}
-            icon={InProgressIcon}
-            color={theme.palette.info.main}
-            bgcolor={theme.palette.info.main + '15'}
+            title="Upcoming Maintenance"
+            value={stats.upcomingMaintenance}
+            subtitle="This Week"
+            icon={MaintenanceIcon}
+            color="#4caf50"
           />
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
           <StatCard
-            title="Finished Tasks"
-            value={stats.finished}
-            icon={FinishedIcon}
-            color={theme.palette.success.main}
-            bgcolor={theme.palette.success.main + '15'}
+            title="Pending Approvals"
+            value={stats.pendingApprovals}
+            icon={ApprovalIcon}
+            color="#ff9800"
           />
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
           <StatCard
-            title="Properties"
+            title="Total Properties"
             value={stats.totalProperties}
             icon={PropertiesIcon}
-            color={theme.palette.primary.main}
-            bgcolor={theme.palette.primary.main + '15'}
+            color="#9c27b0"
           />
         </Grid>
       </Grid>
 
-      {/* Tasks Sections */}
+      {/* Main Content Grid */}
+      <Grid container spacing={3} sx={{ mb: 4 }}>
+        {/* Properties Overview */}
+        <Grid item xs={12} lg={8}>
+          <Card sx={{ height: '100%', minHeight: 450, display: 'flex', flexDirection: 'column' }}>
+            <CardHeader
+              title="Properties Overview"
+              action={<Button size="small">View All →</Button>}
+              titleTypographyProps={{ variant: 'h6' }}
+            />
+            <CardContent sx={{ flexGrow: 1 }}>
+              <Grid container spacing={2}>
+                {properties.length > 0 ? (
+                  properties.map(property => (
+                    <Grid item xs={12} sm={6} md={4} key={property.id}>
+                      <Card sx={{ cursor: 'pointer', '&:hover': { boxShadow: 2 } }}>
+                        <Box sx={{ height: 100, bgcolor: '#667eea', backgroundImage: property.image ? `url(${property.image})` : '', backgroundSize: 'cover', backgroundPosition: 'center' }} />
+                        <CardContent sx={{ pb: 1 }}>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                            {property.name}
+                          </Typography>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-around', pt: 1 }}>
+                            <Box sx={{ textAlign: 'center' }}>
+                              <Typography variant="h6" sx={{ fontWeight: 700, color: '#2196f3' }}>
+                                {property.areas?.length || 0}
+                              </Typography>
+                              <Typography variant="caption">Units</Typography>
+                            </Box>
+                            <Box sx={{ textAlign: 'center' }}>
+                              <Typography variant="h6" sx={{ fontWeight: 700, color: '#f44336' }}>
+                                {property.tasks?.filter(t => t.status !== 'finished').length || 0}
+                              </Typography>
+                              <Typography variant="caption">Issues</Typography>
+                            </Box>
+                          </Box>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                  ))
+                ) : (
+                  <Typography color="textSecondary" sx={{ p: 2 }}>No properties yet</Typography>
+                )}
+              </Grid>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Maintenance Calendar - Placeholder */}
+        <Grid item xs={12} lg={4}>
+          <Card sx={{ height: '100%', minHeight: 450, display: 'flex', flexDirection: 'column' }}>
+            <CardHeader
+              title="Maintenance Calendar"
+              titleTypographyProps={{ variant: 'h6' }}
+            />
+            <CardContent sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Box sx={{ textAlign: 'center', color: 'textSecondary' }}>
+                <MaintenanceIcon sx={{ fontSize: 48, mb: 2, opacity: 0.5 }} />
+                <Typography color="textSecondary">
+                  Calendar feature coming soon
+                </Typography>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
+      {/* Bottom Sections */}
       <Grid container spacing={3}>
-        {/* Pending Tasks */}
-        <Grid item xs={12} md={4}>
-          <Card>
+        {/* Active Work Orders */}
+        <Grid item xs={12} md={6}>
+          <Card sx={{ height: '100%', minHeight: 350, display: 'flex', flexDirection: 'column' }}>
             <CardHeader
-              title="Pending Tasks"
-              titleTypographyProps={{ variant: 'h5' }}
-              avatar={<PendingIcon sx={{ color: theme.palette.warning.main }} />}
+              title="Active Work Orders"
+              titleTypographyProps={{ variant: 'h6' }}
             />
-            <CardContent>
-              {pendingTasks.length > 0 ? (
-                <List>
-                  {pendingTasks.map(task => (
-                    <ListItem key={task.id} sx={{ px: 0, py: 1.5 }}>
-                      <ListItemText
-                        primary={
-                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                            {task.description}
-                          </Typography>
-                        }
-                        secondary={
-                          <Typography variant="caption" sx={{ mt: 0.5, display: 'block' }}>
-                            {task.task_type && `Type: ${task.task_type.name}`}
-                          </Typography>
-                        }
-                      />
-                      <Chip label="Pending" color="warning" size="small" variant="filled" />
-                    </ListItem>
-                  ))}
-                </List>
-              ) : (
-                <Typography color="textSecondary" sx={{ py: 2 }}>
-                  No pending tasks.
-                </Typography>
-              )}
+            <CardContent sx={{ flexGrow: 1, overflow: 'auto' }}>
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell sx={{ fontWeight: 600 }}>Order</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>Property</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {tasks.filter(t => t.status !== 'finished').length > 0 ? (
+                      tasks.filter(t => t.status !== 'finished').slice(0, 5).map(task => (
+                        <TableRow key={task.id}>
+                          <TableCell variant="body" sx={{ fontSize: 'small' }}>
+                            {task.description?.substring(0, 20)}...
+                          </TableCell>
+                          <TableCell variant="body" sx={{ fontSize: 'small' }}>
+                            {task.property?.name || 'N/A'}
+                          </TableCell>
+                          <TableCell>
+                            <Chip 
+                              label={task.status === 'pending' ? 'Pending' : 'In Progress'}
+                              size="small"
+                              variant="filled"
+                              color={task.status === 'pending' ? 'warning' : 'info'}
+                            />
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={3} sx={{ textAlign: 'center', py: 2, color: 'textSecondary' }}>
+                          No active work orders
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
             </CardContent>
           </Card>
         </Grid>
 
-        {/* In Progress Tasks */}
-        <Grid item xs={12} md={4}>
-          <Card>
+        {/* Vendor Contacts */}
+        <Grid item xs={12} md={6}>
+          <Card sx={{ height: '100%', minHeight: 350, display: 'flex', flexDirection: 'column' }}>
             <CardHeader
-              title="In Progress"
-              titleTypographyProps={{ variant: 'h5' }}
-              avatar={<InProgressIcon sx={{ color: theme.palette.info.main }} />}
+              title="Vendor Contacts"
+              titleTypographyProps={{ variant: 'h6' }}
             />
-            <CardContent>
-              {inProgressTasks.length > 0 ? (
+            <CardContent sx={{ flexGrow: 1, overflow: 'auto' }}>
+              {vendors.length > 0 ? (
                 <List>
-                  {inProgressTasks.map(task => (
-                    <ListItem key={task.id} sx={{ px: 0, py: 1.5 }}>
+                  {vendors.map((vendor, index) => (
+                    <ListItem key={vendor.id} sx={{ px: 0, py: 1, borderBottom: index < vendors.length - 1 ? '1px solid #eee' : 'none' }}>
                       <ListItemText
                         primary={
                           <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                            {task.description}
+                            {vendor.name}
                           </Typography>
                         }
-                        secondary={
-                          <Typography variant="caption" sx={{ mt: 0.5, display: 'block' }}>
-                            {task.vendor && `Vendor: ${task.vendor.name}`}
-                          </Typography>
-                        }
+                        secondary={vendor.phone || vendor.email}
                       />
-                      <Chip label="In Progress" color="info" size="small" variant="filled" />
                     </ListItem>
                   ))}
                 </List>
               ) : (
-                <Typography color="textSecondary" sx={{ py: 2 }}>
-                  No tasks in progress.
-                </Typography>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Finished Tasks */}
-        <Grid item xs={12} md={4}>
-          <Card>
-            <CardHeader
-              title="Recently Finished"
-              titleTypographyProps={{ variant: 'h5' }}
-              avatar={<FinishedIcon sx={{ color: theme.palette.success.main }} />}
-            />
-            <CardContent>
-              {finishedTasks.length > 0 ? (
-                <List>
-                  {finishedTasks.map(task => (
-                    <ListItem key={task.id} sx={{ px: 0, py: 1.5 }}>
-                      <ListItemText
-                        primary={
-                          <Typography variant="body2" sx={{ fontWeight: 500, textDecoration: 'line-through' }}>
-                            {task.description}
-                          </Typography>
-                        }
-                        secondary={
-                          <Typography variant="caption" sx={{ mt: 0.5, display: 'block' }}>
-                            {task.final_price && `Final: ${task.currency} ${task.final_price}`}
-                          </Typography>
-                        }
-                      />
-                      <Chip label="Finished" color="success" size="small" variant="filled" />
-                    </ListItem>
-                  ))}
-                </List>
-              ) : (
-                <Typography color="textSecondary" sx={{ py: 2 }}>
-                  No finished tasks yet.
-                </Typography>
+                <Typography color="textSecondary">No vendors added yet</Typography>
               )}
             </CardContent>
           </Card>

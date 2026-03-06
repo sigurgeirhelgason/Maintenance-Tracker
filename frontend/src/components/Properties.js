@@ -60,8 +60,11 @@ const Properties = () => {
     address: '',
     num_floors: 1,
     has_garden: false,
+    image: null,
     floors: {}, // { 1: { 'Living room': 0, 'Bed room': 0, ... }, ... }
   });
+  const [imageFile, setImageFile] = useState(null); // For new/updated images
+  const [imagePreview, setImagePreview] = useState(null); // For preview
   const [roomNames, setRoomNames] = useState({}); // { "floor-type-index": "Custom Name" }
   const [existingAreas, setExistingAreas] = useState([]); // Track existing area IDs for updates
   const [existingAreaMap, setExistingAreaMap] = useState({}); // { "floor-type-index": areaId }
@@ -161,15 +164,20 @@ const Properties = () => {
   const handleOpenDialog = (property = null) => {
     if (property) {
       setEditingProperty(property);
+      setImagePreview(property.image || null);
+      setImageFile(null);
       // Fetch areas for this property to reconstruct room counts
       fetchAreasAndPopulateFloors(property);
     } else {
       setEditingProperty(null);
+      setImagePreview(null);
+      setImageFile(null);
       setFormData({
         name: '',
         address: '',
         num_floors: 1,
         has_garden: false,
+        image: null,
         floors: initializeFloors(1),
       });
       setRoomNames({});
@@ -227,6 +235,7 @@ const Properties = () => {
         address: property.address,
         num_floors: property.num_floors || 1,
         has_garden: property.has_garden || false,
+        image: property.image || null,
         floors: finalFloors,
       });
       setRoomNames(customNames);
@@ -245,6 +254,7 @@ const Properties = () => {
         address: property.address,
         num_floors: property.num_floors || 1,
         has_garden: property.has_garden || false,
+        image: property.image || null,
         floors: initialFloors,
       });
       setRoomNames({});
@@ -261,8 +271,11 @@ const Properties = () => {
       address: '',
       num_floors: 1,
       has_garden: false,
+      image: null,
       floors: initializeFloors(1),
     });
+    setImageFile(null);
+    setImagePreview(null);
     setRoomNames({});
     setExistingAreas([]);
     setExistingAreaMap({});
@@ -305,6 +318,19 @@ const Properties = () => {
         ...prev,
         [name]: newValue,
       }));
+    }
+  };
+
+  const handleImageChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setImageFile(file);
+      // Create a preview URL
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result);
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -475,20 +501,34 @@ const Properties = () => {
     }
 
     try {
-      const propertyData = {
-        name: formData.name,
-        address: formData.address,
-        num_floors: formData.num_floors,
-        has_garden: formData.has_garden,
-      };
+      // Use FormData if there's an image, otherwise use regular JSON
+      let propertyData;
+      let config = { headers: { 'Content-Type': 'application/json' } };
+
+      if (imageFile) {
+        propertyData = new FormData();
+        propertyData.append('name', formData.name);
+        propertyData.append('address', formData.address);
+        propertyData.append('num_floors', formData.num_floors);
+        propertyData.append('has_garden', formData.has_garden);
+        propertyData.append('image', imageFile);
+        config = {}; // Let axios set the correct Content-Type for FormData
+      } else {
+        propertyData = {
+          name: formData.name,
+          address: formData.address,
+          num_floors: formData.num_floors,
+          has_garden: formData.has_garden,
+        };
+      }
 
       let propertyId;
       if (editingProperty) {
-        await axios.put(`/api/properties/${editingProperty.id}/`, propertyData);
+        await axios.put(`/api/properties/${editingProperty.id}/`, propertyData, config);
         propertyId = editingProperty.id;
         showNotification('Property updated successfully!', 'success');
       } else {
-        const response = await axios.post('/api/properties/', propertyData);
+        const response = await axios.post('/api/properties/', propertyData, config);
         propertyId = response.data.id;
         showNotification('Property created successfully!', 'success');
       }
@@ -610,10 +650,6 @@ const Properties = () => {
 
       {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
 
-      <Alert severity="info" sx={{ mb: 3 }}>
-        Use the room counters to define how many of each room type you want on each floor. Rooms automatically become areas you can manage and assign tasks to.
-      </Alert>
-
       {properties.length === 0 ? (
         <Card>
           <CardContent sx={{ py: 6, textAlign: 'center' }}>
@@ -632,60 +668,186 @@ const Properties = () => {
         </Card>
       ) : (
         <Grid container spacing={3}>
-          {properties.map(property => (
-            <Grid item xs={12} sm={6} md={4} key={property.id}>
-              <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-                <CardContent sx={{ flex: 1 }}>
-                  <Typography variant="h5" sx={{ fontWeight: 600, mb: 2 }}>
-                    {property.name}
-                  </Typography>
-                  <Box sx={{ mb: 2 }}>
-                    <Typography variant="body2" color="textSecondary" sx={{ mb: 0.5 }}>
-                      <strong>Address:</strong>
+          {properties.map(property => {
+            const totalRooms = property.areas?.length || 0;
+            const openTasks = property.tasks?.filter(task => task.status !== 'finished')?.length || 0;
+            
+            return (
+            <Grid item xs={12} sm={12} md={12} lg={12} key={property.id}>
+              <Card 
+                onClick={() => handleOpenDialog(property)}
+                sx={{ 
+                  height: '100%', 
+                  display: 'flex', 
+                  flexDirection: 'column',
+                  cursor: 'pointer',
+                  transition: 'transform 0.2s, box-shadow 0.2s',
+                  overflow: 'hidden',
+                  backgroundColor: '#ffffff',
+                  border: '1px solid #e0e0e0',
+                  '&:hover': {
+                    transform: 'translateY(-2px)',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                  }
+                }}
+              >
+                {/* Main Content Area: Text Left, Image Right with Gradient */}
+                <Box
+                  sx={{
+                    height: 250,
+                    display: 'flex',
+                    position: 'relative',
+                  }}
+                >
+                  {/* Left Side: Property Info */}
+                  <Box
+                    sx={{
+                      flex: '1 1 40%',
+                      padding: 4,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'center',
+                      zIndex: 2,
+                    }}
+                  >
+                    <Typography 
+                      variant="h4" 
+                      sx={{ 
+                        fontWeight: 800, 
+                        color: '#1a1a1a', 
+                        mb: 1, 
+                        fontSize: '2rem',
+                        letterSpacing: '-0.02em'
+                      }}
+                    >
+                      {property.name}
                     </Typography>
-                    <Typography variant="body2">
+                    <Typography 
+                      variant="h6" 
+                      sx={{ 
+                        color: '#666', 
+                        fontWeight: 400,
+                        fontSize: '1.1rem', 
+                        mb: 3 
+                      }}
+                    >
                       {property.address}
                     </Typography>
-                  </Box>
-                  <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1, mb: 2 }}>
-                    <Box>
-                      <Typography variant="caption" sx={{ color: 'textSecondary' }}>
-                        <strong>Floors:</strong>
-                      </Typography>
-                      <Typography variant="body2">
-                        {property.num_floors || 1}
-                      </Typography>
+                    
+                    {/* Inline Stats on the left */}
+                    <Box sx={{ display: 'flex', gap: 4 }}>
+                      <Box>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: '#333' }}>Unfinished</Typography>
+                        </Box>
+                        <Typography variant="h6" sx={{ fontWeight: 700, color: '#1a1a1a' }}>
+                          {openTasks}
+                        </Typography>
+                      </Box>
+                      <Box>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: '#333' }}>Total Tasks</Typography>
+                        </Box>
+                        <Typography variant="h6" sx={{ fontWeight: 700, color: '#1a1a1a' }}>
+                          {property.tasks?.length || 0}
+                        </Typography>
+                      </Box>
                     </Box>
-                    <Box>
-                      <Typography variant="caption" sx={{ color: 'textSecondary' }}>
-                        <strong>Garden:</strong>
-                      </Typography>
-                      <Typography variant="body2">
-                        {property.has_garden ? '🌿 Yes' : '❌ No'}
-                      </Typography>
-                    </Box>
                   </Box>
-                </CardContent>
-                <CardActions sx={{ pt: 0 }}>
-                  <Button
-                    size="small"
-                    startIcon={<EditIcon />}
-                    onClick={() => handleOpenDialog(property)}
+
+                  {/* Right Side: Image with White Gradient Overlay */}
+                  <Box
+                    sx={{
+                      flex: '1 1 60%',
+                      position: 'relative',
+                      backgroundImage: property.image ? `url(${property.image})` : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      backgroundSize: 'cover',
+                      backgroundPosition: 'center',
+                    }}
                   >
-                    Edit
-                  </Button>
-                  <Button
-                    size="small"
-                    color="error"
-                    startIcon={<DeleteIcon />}
-                    onClick={() => handleDelete(property.id)}
+                    {/* White Gradient Overlay - fades from solid white to transparent */}
+                    <Box
+                      sx={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        background: 'linear-gradient(to right, #ffffff 0%, rgba(255, 255, 255, 0.95) 10%, rgba(255, 255, 255, 0.4) 40%, rgba(255, 255, 255, 0) 100%)',
+                        zIndex: 1,
+                      }}
+                    />
+                  </Box>
+                </Box>
+
+                {/* Card Footer: Badge-style stats at the bottom */}
+                <Box 
+                  sx={{ 
+                    display: 'flex', 
+                    gap: 2,
+                    p: 2, 
+                    backgroundColor: '#f9fafb',
+                    borderTop: '1px solid #f0f0f0'
+                  }}
+                >
+                  <Box 
+                    sx={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: 1, 
+                      backgroundColor: '#fff',
+                      px: 2, 
+                      py: 0.5, 
+                      borderRadius: 10,
+                      border: '1px solid #e5e7eb'
+                    }}
                   >
-                    Delete
-                  </Button>
-                </CardActions>
+                    <Box sx={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#3b82f6' }} />
+                    <Typography variant="caption" sx={{ fontWeight: 600, color: '#4b5563' }}>
+                      {property.num_floors || 1} Floor{(property.num_floors || 1) !== 1 ? 's' : ''}
+                    </Typography>
+                  </Box>
+
+                  <Box 
+                    sx={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: 1, 
+                      backgroundColor: '#fff',
+                      px: 2, 
+                      py: 0.5, 
+                      borderRadius: 10,
+                      border: '1px solid #e5e7eb'
+                    }}
+                  >
+                    <Box sx={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#6366f1' }} />
+                    <Typography variant="caption" sx={{ fontWeight: 600, color: '#4b5563' }}>
+                      {totalRooms} {totalRooms === 1 ? 'Room' : 'Rooms'}
+                    </Typography>
+                  </Box>
+
+                  <Box 
+                    sx={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: 1, 
+                      backgroundColor: '#fff',
+                      px: 2, 
+                      py: 0.5, 
+                      borderRadius: 10,
+                      border: '1px solid #e5e7eb'
+                    }}
+                  >
+                    <Box sx={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: property.has_garden ? '#10b981' : '#d1d5db' }} />
+                    <Typography variant="caption" sx={{ fontWeight: 600, color: '#4b5563' }}>
+                      Garden: {property.has_garden ? 'Yes' : 'No'}
+                    </Typography>
+                  </Box>
+                </Box>
               </Card>
             </Grid>
-          ))}
+          );
+          })}
         </Grid>
       )}
 
@@ -717,6 +879,45 @@ const Properties = () => {
             variant="outlined"
             sx={{ mb: 2 }}
           />
+          
+          {/* Image Upload */}
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+              Property Image
+            </Typography>
+            {imagePreview && (
+              <Box
+                sx={{
+                  mb: 2,
+                  width: '100%',
+                  maxHeight: 200,
+                  borderRadius: 1,
+                  overflow: 'hidden',
+                  backgroundColor: '#f5f5f5',
+                }}
+              >
+                <img
+                  src={imagePreview}
+                  alt="Property preview"
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                  }}
+                />
+              </Box>
+            )}
+            <input
+              accept="image/*"
+              type="file"
+              onChange={handleImageChange}
+              style={{ marginBottom: 8 }}
+            />
+            <Typography variant="caption" sx={{ color: 'textSecondary', display: 'block' }}>
+              Upload a property image (JPG, PNG, etc.)
+            </Typography>
+          </Box>
+
           <TextField
             margin="dense"
             label="Number of Floors"
@@ -985,6 +1186,16 @@ const Properties = () => {
           )}
         </DialogContent>
         <DialogActions>
+          {editingProperty && (
+            <Button
+              color="error"
+              startIcon={<DeleteIcon />}
+              onClick={() => handleDelete(editingProperty.id)}
+            >
+              Delete
+            </Button>
+          )}
+          <Box sx={{ flex: 1 }} />
           <Button onClick={handleCloseDialog}>Cancel</Button>
           <Button onClick={handleSave} variant="contained">
             {editingProperty ? 'Update' : 'Create'}

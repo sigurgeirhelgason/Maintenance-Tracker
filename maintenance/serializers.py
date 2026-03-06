@@ -2,10 +2,21 @@ from rest_framework import serializers
 from .models import Property, Area, MaintenanceTask, TaskType, Vendor, Attachment
 
 class PropertySerializer(serializers.ModelSerializer):
+    areas = serializers.SerializerMethodField()
+    tasks = serializers.SerializerMethodField()
+
     class Meta:
         model = Property
         fields = '__all__'
         read_only_fields = ['created_at', 'updated_at']
+
+    def get_areas(self, obj):
+        areas = obj.areas.all()
+        return AreaSerializer(areas, many=True).data
+
+    def get_tasks(self, obj):
+        tasks = obj.tasks.all()
+        return MaintenanceTaskSerializer(tasks, many=True).data
 
 class AreaSerializer(serializers.ModelSerializer):
     class Meta:
