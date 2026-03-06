@@ -11,6 +11,7 @@ import Properties from './components/Properties';
 import Areas from './components/Areas';
 import Tasks from './components/Tasks';
 import Vendors from './components/Vendors';
+import TaskTypes from './components/TaskTypes';
 
 // Modern theme with better colors
 const theme = createTheme({
@@ -126,7 +127,7 @@ function App() {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <Router>
-        <Box sx={{ display: 'flex', minHeight: '100vh' }}>
+        <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
           <Sidebar open={sidebarOpen} setOpen={setSidebarOpen} />
           <Box
             component="main"
@@ -135,8 +136,9 @@ function App() {
               display: 'flex',
               flexDirection: 'column',
               width: '100%',
-              ml: { xs: 0, sm: sidebarOpen ? '50px' : '64px' },
+              ml: { xs: 0, sm: sidebarOpen ? '240px' : '48px' },
               transition: 'margin 0.3s ease',
+              overflowY: 'auto', // Enable vertical scrolling for main content
             }}
           >
             <Box sx={{ p: { xs: 2, sm: 4 }, pb: 4 }}>
@@ -146,6 +148,7 @@ function App() {
                 <Route path="/areas" element={<Areas />} />
                 <Route path="/tasks" element={<Tasks />} />
                 <Route path="/vendors" element={<Vendors />} />
+                <Route path="/tasktypes" element={<TaskTypes />} />
               </Routes>
             </Box>
           </Box>

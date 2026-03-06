@@ -57,6 +57,7 @@ class AttachmentSerializer(serializers.ModelSerializer):
 
 class MaintenanceTaskSerializer(serializers.ModelSerializer):
     attachments = serializers.SerializerMethodField()
+    task_type_details = TaskTypeSerializer(source='task_type', read_only=True)
 
     class Meta:
         model = MaintenanceTask

@@ -63,6 +63,7 @@ const Tasks = () => {
     currency: 'USD',
     areas: [],
     notes: '',
+    custom_field_values: {},
   });
 
   const [fileToUpload, setFileToUpload] = useState(null);
@@ -150,7 +151,10 @@ const Tasks = () => {
   const handleOpen = (task = null) => {
     if (task) {
       setEditing(task);
-      setFormData(task);
+      setFormData({
+        ...task,
+        custom_field_values: task.custom_field_values || {},
+      });
     } else {
       setEditing(null);
       setFormData({
@@ -163,6 +167,7 @@ const Tasks = () => {
         currency: 'USD',
         areas: [],
         notes: '',
+        custom_field_values: {},
       });
     }
     setOpen(true);
@@ -203,6 +208,8 @@ const Tasks = () => {
       const submitData = {
         ...formData,
         property: selectedProperty,
+        task_type: formData.task_type?.id || formData.task_type || null,
+        vendor: formData.vendor?.id || formData.vendor || null,
         estimated_price: formData.estimated_price ? parseFloat(formData.estimated_price) : null,
         final_price: formData.final_price ? parseFloat(formData.final_price) : null,
       };
@@ -381,8 +388,20 @@ const Tasks = () => {
 
                       {task.task_type && (
                         <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mb: 1 }}>
-                          <strong>Type:</strong> {task.task_type.name}
+                          <strong>Type:</strong> {task.task_type_details?.name || 'Unknown'}
                         </Typography>
+                      )}
+
+                      {task.custom_field_values && Object.keys(task.custom_field_values).length > 0 && (
+                        <Box sx={{ mb: 1, p: 1, backgroundColor: 'rgba(0,0,0,0.02)', borderRadius: 1 }}>
+                          {Object.entries(task.custom_field_values).map(([label, value]) => (
+                            value ? (
+                              <Typography key={label} variant="caption" sx={{ display: 'block' }}>
+                                <strong>{label}:</strong> {value}
+                              </Typography>
+                            ) : null
+                          ))}
+                        </Box>
                       )}
 
                       {task.areas && task.areas.length > 0 && (
@@ -471,17 +490,59 @@ const Tasks = () => {
             <InputLabel>Task Type</InputLabel>
             <Select
               name="task_type"
-              value={formData.task_type || ''}
-              onChange={handleChange}
+              value={formData.task_type?.id || formData.task_type || ''}
+              onChange={(e) => {
+                setFormData(prev => ({
+                  ...prev,
+                  task_type: e.target.value
+                }));
+              }}
               label="Task Type"
             >
               {taskTypes.map(type => (
                 <MenuItem key={type.id} value={type.id}>
-                  {type.name} ({type.category})
+                  {type.name}
                 </MenuItem>
               ))}
             </Select>
           </FormControl>
+
+          {/* Dynamic Custom Fields based on Task Type */}
+          {(() => {
+            const selectedTypeObj = taskTypes.find(t => t.id === (formData.task_type?.id || formData.task_type));
+            const fields = selectedTypeObj?.custom_field_definitions || [];
+            
+            if (fields.length === 0) return null;
+
+            return (
+              <Box sx={{ mb: 2, p: 2, border: '1px solid #e0e0e0', borderRadius: 1, backgroundColor: 'rgba(0,0,0,0.01)' }}>
+                <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 600 }}>
+                  {selectedTypeObj.name} Details
+                </Typography>
+                <Grid container spacing={2}>
+                  {fields.map((fieldName) => (
+                    <Grid item xs={12} sm={fields.length > 1 ? 6 : 12} key={fieldName}>
+                      <TextField
+                        fullWidth
+                        label={fieldName}
+                        value={formData.custom_field_values?.[fieldName] || ''}
+                        onChange={(e) => {
+                          setFormData(prev => ({
+                            ...prev,
+                            custom_field_values: {
+                              ...(prev.custom_field_values || {}),
+                              [fieldName]: e.target.value
+                            }
+                          }));
+                        }}
+                        size="small"
+                      />
+                    </Grid>
+                  ))}
+                </Grid>
+              </Box>
+            );
+          })()}
 
           {/* Areas Selection */}
           <Paper sx={{ p: 2, mb: 2, backgroundColor: '#f5f5f5' }}>
@@ -508,8 +569,13 @@ const Tasks = () => {
             <InputLabel>Vendor (Optional)</InputLabel>
             <Select
               name="vendor"
-              value={formData.vendor || ''}
-              onChange={handleChange}
+              value={formData.vendor?.id || formData.vendor || ''}
+              onChange={(e) => {
+                setFormData(prev => ({
+                  ...prev,
+                  vendor: e.target.value
+                }));
+              }}
               label="Vendor"
             >
               <MenuItem value="">None</MenuItem>

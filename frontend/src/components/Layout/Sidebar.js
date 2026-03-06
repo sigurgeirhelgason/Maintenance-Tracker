@@ -21,6 +21,7 @@ import {
   Checklist as TasksIcon,
   Handshake as WorkOrdersIcon,
   Business as VendorsIcon,
+  Category as CategoryIcon,
   Menu as MenuIcon,
   Close as CloseIcon,
 } from '@mui/icons-material';
@@ -36,6 +37,7 @@ const Sidebar = ({ open, setOpen }) => {
     { path: '/areas', label: 'Areas', icon: ComponentsIcon },
     { path: '/tasks', label: 'Tasks', icon: TasksIcon },
     { path: '/vendors', label: 'Vendors', icon: VendorsIcon },
+    { path: '/tasktypes', label: 'Task Types', icon: CategoryIcon },
   ];
 
   const drawerWidth = 240;
@@ -130,10 +132,10 @@ const Sidebar = ({ open, setOpen }) => {
         variant="permanent"
         sx={{
           display: { xs: 'none', sm: 'block' },
-          width: open ? drawerWidth : 64,
+          width: open ? drawerWidth : 48, // Reduced collapsed width
           flexShrink: 0,
           '& .MuiDrawer-paper': {
-            width: open ? drawerWidth : 64,
+            width: open ? drawerWidth : 48, // Reduced collapsed width
             boxSizing: 'border-box',
             transition: 'width 0.3s ease',
             border: 'none',

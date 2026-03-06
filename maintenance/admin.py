@@ -15,9 +15,9 @@ class AreaAdmin(admin.ModelAdmin):
 
 @admin.register(TaskType)
 class TaskTypeAdmin(admin.ModelAdmin):
-    list_display = ('name', 'category', 'is_predefined', 'created_at')
+    list_display = ('name', 'is_predefined', 'created_at')
     search_fields = ('name',)
-    list_filter = ('category', 'is_predefined', 'created_at')
+    list_filter = ('is_predefined', 'created_at')
 
 @admin.register(Vendor)
 class VendorAdmin(admin.ModelAdmin):

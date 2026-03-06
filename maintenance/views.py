@@ -24,7 +24,7 @@ class TaskTypeViewSet(viewsets.ModelViewSet):
     queryset = TaskType.objects.all()
     serializer_class = TaskTypeSerializer
     filter_backends = [DjangoFilterBackend, OrderingFilter]
-    filterset_fields = ['category', 'is_predefined']
+    filterset_fields = ['is_predefined']
     ordering_fields = ['name', 'created_at']
 
 class VendorViewSet(viewsets.ModelViewSet):

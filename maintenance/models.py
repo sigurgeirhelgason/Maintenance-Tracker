@@ -44,19 +44,12 @@ class Area(models.Model):
         return f"{self.type} (Floor {self.floor})"
 
 class TaskType(models.Model):
-    CATEGORY_CHOICES = [
-        ('plumbing', 'Plumbing'),
-        ('flooring', 'Flooring'),
-        ('electrical', 'Electrical'),
-        ('heating', 'Heating'),
-        ('painting', 'Painting'),
-        ('maintenance', 'General Maintenance'),
-        ('custom', 'Custom'),
-    ]
-    name = models.CharField(max_length=255)
-    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES)
+    name = models.CharField(max_length=255, unique=True)
     is_predefined = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
+    
+    # Stores a list of custom field names for this task type
+    custom_field_definitions = models.JSONField(default=list, blank=True)
 
     class Meta:
         ordering = ['-is_predefined', 'name']
@@ -90,7 +83,11 @@ class MaintenanceTask(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     estimated_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, validators=[MinValueValidator(0)])
     final_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, validators=[MinValueValidator(0)])
-    currency = models.CharField(max_length=3, default='USD')
+    currency = models.CharField(max_length=3, default='Krónur', blank=True)  # Default to Icelandic Krona, can be changed
+    
+    # Stores values for custom fields defined in task_type
+    custom_field_values = models.JSONField(default=dict, blank=True)
+    
     created_date = models.DateField(auto_now_add=True, null=True)
     completed_date = models.DateField(null=True, blank=True)
     notes = models.TextField(blank=True)
