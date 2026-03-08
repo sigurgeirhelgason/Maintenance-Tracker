@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import {
   Box,
   Card,
   CardContent,
-  CardActions,
   Button,
   Dialog,
   DialogTitle,
@@ -12,7 +11,6 @@ import {
   DialogActions,
   TextField,
   Typography,
-  Grid,
   Alert,
   CircularProgress,
   Select,
@@ -20,10 +18,20 @@ import {
   FormControl,
   InputLabel,
   Paper,
-  Snackbar,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
 } from '@mui/material';
-import { Edit as EditIcon, Delete as DeleteIcon, Add as AddIcon } from '@mui/icons-material';
+import { Add as AddIcon } from '@mui/icons-material';
 import PageHeader from './Layout/PageHeader';
+import DetailPanel from './shared/DetailPanel';
+import DetailField from './shared/DetailField';
+import ConfirmDialog from './shared/ConfirmDialog';
+import NotificationSnackbar from './shared/NotificationSnackbar';
+import { useNotification, useConfirmDialog } from './shared/hooks';
 
 const ROOM_TYPES = [
   'Living room',
@@ -35,6 +43,8 @@ const ROOM_TYPES = [
   'Laundry',
   'Dining room',
   'Garden',
+  'Hallway',
+  'Other'
 ];
 
 const Areas = () => {
@@ -43,19 +53,11 @@ const Areas = () => {
   const [areas, setAreas] = useState([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [selectedArea, setSelectedArea] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [notification, setNotification] = useState({
-    open: false,
-    message: '',
-    severity: 'success',
-  });
-  const [confirmDialog, setConfirmDialog] = useState({
-    open: false,
-    title: '',
-    message: '',
-    onConfirm: null,
-  });
+  const { notification, showNotification, handleCloseNotification } = useNotification();
+  const { confirmDialog, openConfirmDialog, handleConfirmDialogClose, handleConfirmDialogConfirm } = useConfirmDialog();
   const [formData, setFormData] = useState({
     type: ROOM_TYPES[0],
     name: '',
@@ -73,29 +75,7 @@ const Areas = () => {
     }
   }, [selectedProperty]);
 
-  const showNotification = (message, severity = 'success') => {
-    setNotification({ open: true, message, severity });
-  };
 
-  const handleCloseNotification = (event, reason) => {
-    if (reason === 'clickaway') return;
-    setNotification(prev => ({ ...prev, open: false }));
-  };
-
-  const openConfirmDialog = (title, message, onConfirm) => {
-    setConfirmDialog({ open: true, title, message, onConfirm });
-  };
-
-  const handleConfirmDialogClose = () => {
-    setConfirmDialog(prev => ({ ...prev, open: false }));
-  };
-
-  const handleConfirmDialogConfirm = () => {
-    if (confirmDialog.onConfirm) {
-      confirmDialog.onConfirm();
-    }
-    handleConfirmDialogClose();
-  };
 
   const getAreasByFloor = () => {
     // Group areas by floor (0 = garden, 1+ = regular floors)
@@ -136,11 +116,26 @@ const Areas = () => {
     try {
       const response = await axios.get(`/api/areas/?property=${propertyId}`);
       setAreas(response.data);
+      setSelectedArea(null);
     } catch (err) {
       console.error('Error fetching areas:', err);
       setError('Error fetching areas');
     }
   };
+
+  const areasByFloor = useMemo(() => {
+    const grouped = {};
+    (areas || []).forEach(area => {
+      const floor = area.floor ?? 1;
+      if (!grouped[floor]) grouped[floor] = [];
+      grouped[floor].push(area);
+    });
+    // sort areas within each floor by name/type
+    Object.keys(grouped).forEach(f => {
+      grouped[f].sort((a, b) => (a.name || a.type).localeCompare(b.name || b.type));
+    });
+    return grouped;
+  }, [areas]);
 
   const handlePropertyChange = (e) => {
     setSelectedProperty(e.target.value);
@@ -292,7 +287,7 @@ const Areas = () => {
             </>
           )}
 
-          {/* Areas Grid */}
+          {/* Areas Table with Detail Panel */}
           {areas.length === 0 ? (
             <Card>
               <CardContent sx={{ py: 6, textAlign: 'center' }}>
@@ -309,59 +304,74 @@ const Areas = () => {
               </CardContent>
             </Card>
           ) : (
-            <Box>
-              {Object.entries(getAreasByFloor()).map(([floor, floorAreas]) => (
-                <Box key={floor} sx={{ mb: 4 }}>
-                  <Paper 
-                    sx={{ 
-                      p: 2, 
-                      mb: 2, 
-                      backgroundColor: floor === '0' ? '#e8f5e9' : '#f5f5f5',
-                      borderLeft: floor === '0' ? '4px solid #4caf50' : '4px solid #2563eb'
-                    }}
-                  >
-                    <Typography variant="h6" sx={{ fontWeight: 600, color: floor === '0' ? '#2e7d32' : 'inherit' }}>
-                      {floor === '0' ? '🌿 Garden' : `Floor ${floor}`}
-                    </Typography>
-                  </Paper>
-                  <Grid container spacing={2}>
-                    {floorAreas.map(area => (
-                      <Grid item xs={12} sm={6} md={4} key={area.id}>
-                        <Card sx={{ 
-                          height: '100%', 
-                          display: 'flex', 
-                          flexDirection: 'column',
-                          borderTop: floor === '0' ? '3px solid #4caf50' : '3px solid #2563eb'
-                        }}>
-                          <CardContent sx={{ flex: 1 }}>
-                            <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>
-                              {area.type}
-                            </Typography>
-                            {area.name && (
-                              <Typography variant="body2" color="textSecondary" sx={{ mb: 1 }}>
-                                {area.name}
-                              </Typography>
-                            )}
-                            {area.description && (
-                              <Typography variant="body2" color="textSecondary">
-                                {area.description}
-                              </Typography>
-                            )}
-                          </CardContent>
-                          <CardActions sx={{ pt: 0 }}>
-                            <Button size="small" startIcon={<EditIcon />} onClick={() => handleOpen(area)}>
-                              Edit
-                            </Button>
-                            <Button size="small" color="error" startIcon={<DeleteIcon />} onClick={() => handleDelete(area.id)}>
-                              Delete
-                            </Button>
-                          </CardActions>
-                        </Card>
-                      </Grid>
-                    ))}
-                  </Grid>
-                </Box>
-              ))}
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <TableContainer component={Paper} sx={{ flex: 1 }}>
+                <Table size="small">
+                  <TableHead sx={{ bgcolor: '#F5F5F5' }}>
+                    <TableRow>
+                      <TableCell sx={{ fontWeight: 700, minWidth: 180 }}>Type</TableCell>
+                      <TableCell sx={{ fontWeight: 700, minWidth: 160 }}>Name</TableCell>
+                      <TableCell sx={{ fontWeight: 700, minWidth: 80 }}>Floor</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Description</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {Object.keys(areasByFloor)
+                      .map(k => parseInt(k, 10))
+                      .sort((a, b) => a - b)
+                      .map(floor => (
+                        <React.Fragment key={`floor-${floor}`}>
+                          <TableRow sx={{ backgroundColor: '#fafafa' }}>
+                            <TableCell colSpan={4} sx={{ fontWeight: 700, py: 1 }}>
+                              {floor === 0 ? '🌿 Garden' : `Floor ${floor}`}
+                            </TableCell>
+                          </TableRow>
+                          {areasByFloor[floor].map(area => (
+                            <TableRow
+                              key={area.id}
+                              onClick={() => setSelectedArea(area)}
+                              sx={{
+                                cursor: 'pointer',
+                                bgcolor: selectedArea?.id === area.id ? '#E3F2FD' : 'transparent',
+                                '&:hover': { bgcolor: '#F5F5F5' },
+                              }}
+                            >
+                              <TableCell sx={{ fontWeight: 600 }}>{area.type}</TableCell>
+                              <TableCell sx={{ fontSize: '0.95rem' }}>{area.name || '-'}</TableCell>
+                              <TableCell sx={{ fontSize: '0.9rem' }}>{area.floor === 0 ? 'Garden' : area.floor}</TableCell>
+                              <TableCell sx={{ fontSize: '0.9rem', color: '#666' }}>{area.description || '-'}</TableCell>
+                            </TableRow>
+                          ))}
+                          <TableRow>
+                            <TableCell colSpan={4} sx={{ height: 8, borderBottom: 'none' }} />
+                          </TableRow>
+                        </React.Fragment>
+                      ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+
+              {/* Area Detail Panel */}
+              {selectedArea && (
+                <DetailPanel
+                  title="Area Details"
+                  onClose={() => setSelectedArea(null)}
+                  onEdit={() => { handleOpen(selectedArea); setSelectedArea(null); }}
+                  onDelete={() => { handleDelete(selectedArea.id); setSelectedArea(null); }}
+                >
+                  <DetailField label="TYPE" value={selectedArea.type} />
+                  {selectedArea.name && (
+                    <DetailField label="NAME" value={selectedArea.name} />
+                  )}
+                  <DetailField
+                    label="FLOOR"
+                    value={selectedArea.floor === 0 ? 'Garden' : `Floor ${selectedArea.floor}`}
+                  />
+                  {selectedArea.description && (
+                    <DetailField label="DESCRIPTION" value={selectedArea.description} />
+                  )}
+                </DetailPanel>
+              )}
             </Box>
           )}
         </Box>
@@ -454,45 +464,21 @@ const Areas = () => {
       </Dialog>
 
       {/* Notification Snackbar */}
-      <Snackbar
+      <NotificationSnackbar
         open={notification.open}
-        autoHideDuration={6000}
+        message={notification.message}
+        severity={notification.severity}
         onClose={handleCloseNotification}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-      >
-        <Alert
-          onClose={handleCloseNotification}
-          severity={notification.severity}
-          sx={{ width: '100%' }}
-        >
-          {notification.message}
-        </Alert>
-      </Snackbar>
+      />
 
       {/* Confirmation Dialog */}
-      <Dialog
+      <ConfirmDialog
         open={confirmDialog.open}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
         onClose={handleConfirmDialogClose}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle sx={{ fontWeight: 600 }}>
-          {confirmDialog.title}
-        </DialogTitle>
-        <DialogContent sx={{ pt: 2 }}>
-          <Typography>{confirmDialog.message}</Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleConfirmDialogClose}>Cancel</Button>
-          <Button
-            onClick={handleConfirmDialogConfirm}
-            variant="contained"
-            color="error"
-          >
-            Delete
-          </Button>
-        </DialogActions>
-      </Dialog>
+        onConfirm={handleConfirmDialogConfirm}
+      />
     </Box>
   );
 };

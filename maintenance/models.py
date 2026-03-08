@@ -25,6 +25,8 @@ class Area(models.Model):
         ('Laundry', 'Laundry'),
         ('Dining room', 'Dining room'),
         ('Garden', 'Garden'),
+        ('Hallway', 'Hallway'),
+        ('Other', 'Other'),
     ]
     
     property = models.ForeignKey(Property, on_delete=models.CASCADE, related_name='areas')
@@ -75,12 +77,19 @@ class MaintenanceTask(models.Model):
         ('in_progress', 'In Progress'),
         ('finished', 'Finished'),
     ]
+    PRIORITY_CHOICES = [
+        ('low', 'Low'),
+        ('medium', 'Medium'),
+        ('high', 'High'),
+    ]
     property = models.ForeignKey(Property, on_delete=models.CASCADE, related_name='tasks', null=True, blank=True)
     areas = models.ManyToManyField(Area, related_name='tasks', blank=True)
     description = models.TextField()
     task_type = models.ForeignKey(TaskType, on_delete=models.SET_NULL, null=True, blank=True)
     vendor = models.ForeignKey(Vendor, on_delete=models.SET_NULL, null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default='medium')
+    due_date = models.DateField(null=True, blank=True)
     estimated_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, validators=[MinValueValidator(0)])
     final_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, validators=[MinValueValidator(0)])
     currency = models.CharField(max_length=3, default='Krónur', blank=True)  # Default to Icelandic Krona, can be changed

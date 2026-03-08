@@ -673,7 +673,7 @@ const Properties = () => {
             const openTasks = property.tasks?.filter(task => task.status !== 'finished')?.length || 0;
             
             return (
-            <Grid item xs={12} sm={12} md={12} lg={12} key={property.id}>
+            <Grid item xs={12} sm={12} md={12} lg={6} key={property.id}>
               <Card 
                 onClick={() => handleOpenDialog(property)}
                 sx={{ 

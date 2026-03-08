@@ -136,7 +136,7 @@ function App() {
               display: 'flex',
               flexDirection: 'column',
               width: '100%',
-              ml: { xs: 0, sm: sidebarOpen ? '240px' : '48px' },
+              ml: { xs: 0, sm: sidebarOpen ? '80px' : '48px' },
               transition: 'margin 0.3s ease',
               overflowY: 'auto', // Enable vertical scrolling for main content
             }}

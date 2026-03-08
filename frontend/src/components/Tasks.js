@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import {
   Box,
   Card,
   CardContent,
-  CardActions,
   Button,
   Dialog,
   DialogTitle,
@@ -24,10 +23,21 @@ import {
   FormControlLabel,
   Checkbox,
   Paper,
-  Snackbar,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  InputAdornment,
 } from '@mui/material';
-import { Edit as EditIcon, Delete as DeleteIcon, Add as AddIcon, Download as DownloadIcon, CheckCircle as CheckIcon } from '@mui/icons-material';
+import { Add as AddIcon, Download as DownloadIcon, Search as SearchIcon, ArrowUpward as ArrowUpIcon, ArrowDownward as ArrowDownIcon } from '@mui/icons-material';
 import PageHeader from './Layout/PageHeader';
+import DetailPanel from './shared/DetailPanel';
+import DetailField from './shared/DetailField';
+import ConfirmDialog from './shared/ConfirmDialog';
+import NotificationSnackbar from './shared/NotificationSnackbar';
+import { useNotification, useConfirmDialog } from './shared/hooks';
 
 const Tasks = () => {
   const [properties, setProperties] = useState([]);
@@ -37,30 +47,31 @@ const Tasks = () => {
   const [tasks, setTasks] = useState([]);
   
   const [selectedProperty, setSelectedProperty] = useState(null);
+  const [selectedTask, setSelectedTask] = useState(null);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [notification, setNotification] = useState({
-    open: false,
-    message: '',
-    severity: 'success',
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortBy, setSortBy] = useState('priority');
+  const [sortDirection, setSortDirection] = useState('desc');
+  const [filters, setFilters] = useState({
+    status: null,
+    priority: null,
+    property: null,
   });
-  const [confirmDialog, setConfirmDialog] = useState({
-    open: false,
-    title: '',
-    message: '',
-    onConfirm: null,
-  });
+  const { notification, showNotification, handleCloseNotification } = useNotification();
+  const { confirmDialog, openConfirmDialog, handleConfirmDialogClose, handleConfirmDialogConfirm } = useConfirmDialog();
   
   const [formData, setFormData] = useState({
     description: '',
     task_type: '',
     vendor: null,
     status: 'pending',
+    priority: 'medium',
+    due_date: '',
     estimated_price: '',
     final_price: '',
-    currency: 'USD',
     areas: [],
     notes: '',
     custom_field_values: {},
@@ -72,29 +83,88 @@ const Tasks = () => {
     fetchInitialData();
   }, []);
 
-  const showNotification = (message, severity = 'success') => {
-    setNotification({ open: true, message, severity });
-  };
-
-  const handleCloseNotification = (event, reason) => {
-    if (reason === 'clickaway') return;
-    setNotification(prev => ({ ...prev, open: false }));
-  };
-
-  const openConfirmDialog = (title, message, onConfirm) => {
-    setConfirmDialog({ open: true, title, message, onConfirm });
-  };
-
-  const handleConfirmDialogClose = () => {
-    setConfirmDialog(prev => ({ ...prev, open: false }));
-  };
-
-  const handleConfirmDialogConfirm = () => {
-    if (confirmDialog.onConfirm) {
-      confirmDialog.onConfirm();
+  useEffect(() => {
+    if (selectedProperty) {
+      fetchAreasForProperty(selectedProperty);
+      fetchTasksForProperty(selectedProperty);
     }
-    handleConfirmDialogClose();
-  };
+  }, [selectedProperty]);
+
+  const getTaskStatistics = useMemo(() => {
+    const today = new Date();
+    const weekFromNow = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const monthAgo = new Date(today.getFullYear(), today.getMonth(), 1);
+
+    return {
+      open: tasks.filter(t => t.status === 'pending').length,
+      overdue: tasks.filter(t => {
+        if (!t.due_date || t.status === 'finished') return false;
+        return new Date(t.due_date) < today;
+      }).length,
+      scheduledThisWeek: tasks.filter(t => {
+        if (!t.due_date || t.status === 'finished') return false;
+        const dueDate = new Date(t.due_date);
+        return dueDate >= today && dueDate <= weekFromNow;
+      }).length,
+      completedThisMonth: tasks.filter(t => {
+        if (t.status !== 'finished' || !t.completed_date) return false;
+        const completed = new Date(t.completed_date);
+        return completed >= monthAgo && completed <= today;
+      }).length,
+    };
+  }, [tasks]);
+
+  const filteredTasks = useMemo(() => {
+    let result = tasks.filter(task => {
+      const matchesSearch = task.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (task.vendor?.name || '').toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesStatus = !filters.status || task.status === filters.status;
+      const matchesPriority = !filters.priority || task.priority === filters.priority;
+      const matchesProperty = !filters.property || task.property === filters.property;
+
+      return matchesSearch && matchesStatus && matchesPriority && matchesProperty;
+    });
+
+    // Sort based on sortBy
+    result.sort((a, b) => {
+      let comparison = 0;
+      
+      switch (sortBy) {
+        case 'priority':
+          const priorityOrder = { high: 0, medium: 1, low: 2 };
+          comparison = priorityOrder[a.priority] - priorityOrder[b.priority];
+          break;
+        case 'due_date':
+          if (!a.due_date && !b.due_date) comparison = 0;
+          else if (!a.due_date) comparison = 1;
+          else if (!b.due_date) comparison = -1;
+          else comparison = new Date(a.due_date) - new Date(b.due_date);
+          break;
+        case 'status':
+          const statusOrder = { pending: 0, in_progress: 1, finished: 2 };
+          comparison = statusOrder[a.status] - statusOrder[b.status];
+          break;
+        case 'cost':
+          const costA = a.final_price || a.estimated_price || 0;
+          const costB = b.final_price || b.estimated_price || 0;
+          comparison = costB - costA;
+          break;
+        case 'room':
+          const roomA = a.areas?.[0] || 0;
+          const roomB = b.areas?.[0] || 0;
+          comparison = roomA - roomB;
+          break;
+        default:
+          return 0;
+      }
+      
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+
+    return result;
+  }, [tasks, searchTerm, filters, sortBy, sortDirection]);
+
+
 
   useEffect(() => {
     if (selectedProperty) {
@@ -102,6 +172,17 @@ const Tasks = () => {
       fetchTasksForProperty(selectedProperty);
     }
   }, [selectedProperty]);
+
+  const handleSortClick = (newSort) => {
+    if (sortBy === newSort) {
+      // Toggle direction if clicking the same button
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      // Reset to descending when switching sort option
+      setSortBy(newSort);
+      setSortDirection('desc');
+    }
+  };
 
   const fetchInitialData = async () => {
     try {
@@ -138,6 +219,7 @@ const Tasks = () => {
     try {
       const response = await axios.get(`/api/tasks/?property=${propertyId}`);
       setTasks(response.data);
+      setSelectedTask(null);
     } catch (err) {
       console.error('Error fetching tasks:', err);
       setError('Error fetching tasks');
@@ -145,7 +227,9 @@ const Tasks = () => {
   };
 
   const handlePropertyChange = (e) => {
-    setSelectedProperty(e.target.value);
+    const newPropertyId = e.target.value;
+    setSelectedProperty(newPropertyId);
+    setFilters(prev => ({ ...prev, property: null }));
   };
 
   const handleOpen = (task = null) => {
@@ -162,9 +246,10 @@ const Tasks = () => {
         task_type: '',
         vendor: null,
         status: 'pending',
+        priority: 'medium',
+        due_date: '',
         estimated_price: '',
         final_price: '',
-        currency: 'USD',
         areas: [],
         notes: '',
         custom_field_values: {},
@@ -210,6 +295,7 @@ const Tasks = () => {
         property: selectedProperty,
         task_type: formData.task_type?.id || formData.task_type || null,
         vendor: formData.vendor?.id || formData.vendor || null,
+        due_date: formData.due_date || null,
         estimated_price: formData.estimated_price ? parseFloat(formData.estimated_price) : null,
         final_price: formData.final_price ? parseFloat(formData.final_price) : null,
       };
@@ -218,9 +304,11 @@ const Tasks = () => {
       if (editing) {
         await axios.put(`/api/tasks/${editing.id}/`, submitData);
         taskId = editing.id;
+        showNotification('Task updated successfully', 'success');
       } else {
         const response = await axios.post('/api/tasks/', submitData);
         taskId = response.data.id;
+        showNotification('Task created successfully', 'success');
       }
 
       // Upload file if present
@@ -239,7 +327,7 @@ const Tasks = () => {
       handleClose();
     } catch (err) {
       console.error('Error saving task:', err);
-      setError('Error saving task');
+      showNotification('Error saving task', 'error');
     }
   };
 
@@ -263,27 +351,64 @@ const Tasks = () => {
   const getStatusColor = (status) => {
     switch (status) {
       case 'pending':
-        return 'warning';
+        return '#FFA726';
       case 'in_progress':
-        return 'info';
+        return '#42A5F5';
       case 'finished':
-        return 'success';
+        return '#66BB6A';
       default:
-        return 'default';
+        return '#BDBDBD';
+    }
+  };
+
+  const getPriorityColor = (priority) => {
+    switch (priority) {
+      case 'high':
+        return '#EF5350';
+      case 'medium':
+        return '#FFA726';
+      case 'low':
+        return '#66BB6A';
+      default:
+        return '#BDBDBD';
     }
   };
 
   const getStatusLabel = (status) => {
     switch (status) {
       case 'pending':
-        return 'Pending';
+        return 'Open';
       case 'in_progress':
         return 'In Progress';
       case 'finished':
-        return 'Finished';
+        return 'Completed';
       default:
         return status;
     }
+  };
+
+  const getPriorityLabel = (priority) => {
+    switch (priority) {
+      case 'high':
+        return 'High';
+      case 'medium':
+        return 'Medium';
+      case 'low':
+        return 'Low';
+      default:
+        return 'Medium';
+    }
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return '-';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  const isOverdue = (dueDate, status) => {
+    if (!dueDate || status === 'finished') return false;
+    return new Date(dueDate) < new Date();
   };
 
   if (loading) {
@@ -299,8 +424,8 @@ const Tasks = () => {
   return (
     <Box>
       <PageHeader
-        title="Maintenance Tasks"
-        subtitle="Create and manage maintenance tasks"
+        title="Tasks"
+        subtitle="Manage maintenance tasks across properties"
         breadcrumbs={[{ label: 'Home', path: '/' }, { label: 'Tasks' }]}
       />
 
@@ -315,13 +440,13 @@ const Tasks = () => {
       ) : (
         <Box>
           {/* Property Selector */}
-          <Box sx={{ mb: 4 }}>
-            <FormControl sx={{ minWidth: 200, mb: 2 }}>
-              <InputLabel>Select Property</InputLabel>
+          <Box sx={{ mb: 3, display: 'flex', gap: 2 }}>
+            <FormControl sx={{ minWidth: 250 }}>
+              <InputLabel>Properties</InputLabel>
               <Select
                 value={selectedProperty || ''}
                 onChange={handlePropertyChange}
-                label="Select Property"
+                label="Properties"
               >
                 {properties.map(prop => (
                   <MenuItem key={prop.id} value={prop.id}>
@@ -334,136 +459,325 @@ const Tasks = () => {
               variant="contained"
               startIcon={<AddIcon />}
               onClick={() => handleOpen()}
-              sx={{ ml: 2, mt: 1 }}
+              sx={{ mt: 1 }}
             >
               New Task
             </Button>
           </Box>
 
-          {/* Property Info */}
-          {currentProperty && (
-            <Card sx={{ mb: 3, backgroundColor: 'rgba(37, 99, 235, 0.05)' }}>
-              <CardContent>
-                <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                  {currentProperty.name}
-                </Typography>
-                <Typography variant="body2" color="textSecondary" sx={{ mt: 0.5 }}>
-                  {currentProperty.address}
-                </Typography>
-              </CardContent>
-            </Card>
-          )}
+          {/* Task Statistics Cards */}
+          <Grid container spacing={2} sx={{ mb: 4 }}>
+            <Grid item xs={12} sm={6} md={3}>
+              <Card sx={{ bgcolor: '#E8F5E9', borderLeft: '4px solid #4CAF50' }}>
+                <CardContent sx={{ p: 2 }}>
+                  <Typography color="textSecondary" variant="caption" sx={{ fontWeight: 600 }}>
+                    OPEN TASKS
+                  </Typography>
+                  <Typography variant="h4" sx={{ fontWeight: 700, color: '#2E7D32' }}>
+                    {getTaskStatistics.open}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <Card sx={{ bgcolor: '#FFEBEE', borderLeft: '4px solid #F44336' }}>
+                <CardContent sx={{ p: 2 }}>
+                  <Typography color="textSecondary" variant="caption" sx={{ fontWeight: 600 }}>
+                    OVERDUE
+                  </Typography>
+                  <Typography variant="h4" sx={{ fontWeight: 700, color: '#C62828' }}>
+                    {getTaskStatistics.overdue}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <Card sx={{ bgcolor: '#FFF3E0', borderLeft: '4px solid #FF9800' }}>
+                <CardContent sx={{ p: 2 }}>
+                  <Typography color="textSecondary" variant="caption" sx={{ fontWeight: 600 }}>
+                    SCHEDULED THIS WEEK
+                  </Typography>
+                  <Typography variant="h4" sx={{ fontWeight: 700, color: '#E65100' }}>
+                    {getTaskStatistics.scheduledThisWeek}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <Card sx={{ bgcolor: '#E3F2FD', borderLeft: '4px solid #2196F3' }}>
+                <CardContent sx={{ p: 2 }}>
+                  <Typography color="textSecondary" variant="caption" sx={{ fontWeight: 600 }}>
+                    COMPLETED THIS MONTH
+                  </Typography>
+                  <Typography variant="h4" sx={{ fontWeight: 700, color: '#1565C0' }}>
+                    {getTaskStatistics.completedThisMonth}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
 
-          {/* Tasks Grid */}
-          {tasks.length === 0 ? (
+          {/* Search and Filters */}
+          <Paper sx={{ p: 2, mb: 3 }}>
+            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center', mb: 2 }}>
+              <TextField
+                placeholder="Search tasks..."
+                variant="outlined"
+                size="small"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                InputProps={{
+                  startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment>,
+                }}
+                sx={{ minWidth: 250 }}
+              />
+              <FormControl size="small" sx={{ minWidth: 150 }}>
+                <InputLabel>Status</InputLabel>
+                <Select
+                  value={filters.status || ''}
+                  onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value || null }))}
+                  label="Status"
+                >
+                  <MenuItem value="">All Statuses</MenuItem>
+                  <MenuItem value="pending">Open</MenuItem>
+                  <MenuItem value="in_progress">In Progress</MenuItem>
+                  <MenuItem value="finished">Completed</MenuItem>
+                </Select>
+              </FormControl>
+              <FormControl size="small" sx={{ minWidth: 150 }}>
+                <InputLabel>Priority</InputLabel>
+                <Select
+                  value={filters.priority || ''}
+                  onChange={(e) => setFilters(prev => ({ ...prev, priority: e.target.value || null }))}
+                  label="Priority"
+                >
+                  <MenuItem value="">All Priorities</MenuItem>
+                  <MenuItem value="high">High</MenuItem>
+                  <MenuItem value="medium">Medium</MenuItem>
+                  <MenuItem value="low">Low</MenuItem>
+                </Select>
+              </FormControl>
+              {(searchTerm || filters.status || filters.priority) && (
+                <Button
+                  size="small"
+                  onClick={() => {
+                    setSearchTerm('');
+                    setFilters({ status: null, priority: null, property: null });
+                  }}
+                >
+                  Clear Filters
+                </Button>
+              )}
+            </Box>
+          </Paper>
+
+          {/* Order By Buttons */}
+          <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
+            <Typography variant="body2" sx={{ fontWeight: 600, display: 'flex', alignItems: 'center' }}>
+              Order By:
+            </Typography>
+            <Button
+              size="small"
+              variant={sortBy === 'priority' ? 'contained' : 'outlined'}
+              onClick={() => handleSortClick('priority')}
+              endIcon={sortBy === 'priority' && (sortDirection === 'asc' ? <ArrowUpIcon /> : <ArrowDownIcon />)}
+              sx={{ textTransform: 'none' }}
+            >
+              Priority
+            </Button>
+            <Button
+              size="small"
+              variant={sortBy === 'due_date' ? 'contained' : 'outlined'}
+              onClick={() => handleSortClick('due_date')}
+              endIcon={sortBy === 'due_date' && (sortDirection === 'asc' ? <ArrowUpIcon /> : <ArrowDownIcon />)}
+              sx={{ textTransform: 'none' }}
+            >
+              Due Date
+            </Button>
+            <Button
+              size="small"
+              variant={sortBy === 'status' ? 'contained' : 'outlined'}
+              onClick={() => handleSortClick('status')}
+              endIcon={sortBy === 'status' && (sortDirection === 'asc' ? <ArrowUpIcon /> : <ArrowDownIcon />)}
+              sx={{ textTransform: 'none' }}
+            >
+              Status
+            </Button>
+            <Button
+              size="small"
+              variant={sortBy === 'cost' ? 'contained' : 'outlined'}
+              onClick={() => handleSortClick('cost')}
+              endIcon={sortBy === 'cost' && (sortDirection === 'asc' ? <ArrowUpIcon /> : <ArrowDownIcon />)}
+              sx={{ textTransform: 'none' }}
+            >
+              Cost
+            </Button>
+            <Button
+              size="small"
+              variant={sortBy === 'room' ? 'contained' : 'outlined'}
+              onClick={() => handleSortClick('room')}
+              endIcon={sortBy === 'room' && (sortDirection === 'asc' ? <ArrowUpIcon /> : <ArrowDownIcon />)}
+              sx={{ textTransform: 'none' }}
+            >
+              Room
+            </Button>
+          </Box>
+
+          {filteredTasks.length === 0 ? (
             <Card>
               <CardContent sx={{ py: 6, textAlign: 'center' }}>
-                <Typography color="textSecondary" sx={{ mb: 2 }}>
-                  No tasks yet. Add one to get started.
-                </Typography>
-                <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpen()}>
+                <Typography color="textSecondary">No tasks found.</Typography>
+                <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpen()} sx={{ mt: 2 }}>
                   New Task
                 </Button>
               </CardContent>
             </Card>
           ) : (
-            <Grid container spacing={3}>
-              {tasks.map(task => (
-                <Grid item xs={12} sm={6} md={4} key={task.id}>
-                  <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column', opacity: task.status === 'finished' ? 0.8 : 1 }}>
-                    <CardContent sx={{ flex: 1 }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
-                        <Typography variant="h6" sx={{ fontWeight: 600, flex: 1, textDecoration: task.status === 'finished' ? 'line-through' : 'none' }}>
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              {/* Tasks Table */}
+              <TableContainer component={Paper} sx={{ flex: 1 }}>
+                <Table size="small">
+                  <TableHead sx={{ bgcolor: '#F5F5F5' }}>
+                    <TableRow>
+                      <TableCell sx={{ fontWeight: 700, minWidth: 40 }}>Priority</TableCell>
+                      <TableCell sx={{ fontWeight: 700, minWidth: 200 }}>Task</TableCell>
+                      <TableCell sx={{ fontWeight: 700, minWidth: 120 }}>Property</TableCell>
+                      <TableCell sx={{ fontWeight: 700, minWidth: 100 }}>Room</TableCell>
+                      <TableCell sx={{ fontWeight: 700, minWidth: 100 }}>Status</TableCell>
+                      <TableCell sx={{ fontWeight: 700, minWidth: 80 }}>Due Date</TableCell>
+                      <TableCell sx={{ fontWeight: 700, minWidth: 80, textAlign: 'right' }}>Cost</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {filteredTasks.map(task => (
+                      <TableRow
+                        key={task.id}
+                        onClick={() => setSelectedTask(task)}
+                        sx={{
+                          cursor: 'pointer',
+                          bgcolor: selectedTask?.id === task.id ? '#E3F2FD' : 'transparent',
+                          '&:hover': {
+                            bgcolor: '#F5F5F5',
+                          },
+                        }}
+                      >
+                        <TableCell>
+                          <Box
+                            sx={{
+                              width: 20,
+                              height: 20,
+                              borderRadius: '50%',
+                              bgcolor: getPriorityColor(task.priority),
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                            }}
+                            title={getPriorityLabel(task.priority)}
+                          />
+                        </TableCell>
+                        <TableCell sx={{ fontWeight: 500, fontSize: '0.95rem' }}>
                           {task.description}
-                        </Typography>
-                        {task.status === 'finished' && <CheckIcon sx={{ color: 'success.main', ml: 1 }} />}
-                      </Box>
-                      
-                      <Chip
-                        label={getStatusLabel(task.status)}
-                        color={getStatusColor(task.status)}
-                        size="small"
-                        sx={{ mb: 2 }}
-                      />
+                        </TableCell>
+                        <TableCell sx={{ fontSize: '0.9rem' }}>
+                          {currentProperty?.name || '-'}
+                        </TableCell>
+                        <TableCell sx={{ fontSize: '0.9rem' }}>
+                          {task.areas && task.areas.length > 0 
+                            ? areas.filter(a => task.areas.includes(a.id)).map(a => a.name).join(', ')
+                            : '-'
+                          }
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            label={getStatusLabel(task.status)}
+                            size="small"
+                            sx={{
+                              bgcolor: getStatusColor(task.status),
+                              color: 'white',
+                              fontWeight: 600,
+                              fontSize: '0.75rem',
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell
+                          sx={{
+                            fontSize: '0.9rem',
+                            color: isOverdue(task.due_date, task.status) ? '#F44336' : '#666',
+                            fontWeight: isOverdue(task.due_date, task.status) ? 600 : 400,
+                          }}
+                        >
+                          {formatDate(task.due_date)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
 
-                      {task.task_type && (
-                        <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mb: 1 }}>
-                          <strong>Type:</strong> {task.task_type_details?.name || 'Unknown'}
-                        </Typography>
-                      )}
-
-                      {task.custom_field_values && Object.keys(task.custom_field_values).length > 0 && (
-                        <Box sx={{ mb: 1, p: 1, backgroundColor: 'rgba(0,0,0,0.02)', borderRadius: 1 }}>
-                          {Object.entries(task.custom_field_values).map(([label, value]) => (
-                            value ? (
-                              <Typography key={label} variant="caption" sx={{ display: 'block' }}>
-                                <strong>{label}:</strong> {value}
-                              </Typography>
-                            ) : null
-                          ))}
-                        </Box>
-                      )}
-
-                      {task.areas && task.areas.length > 0 && (
-                        <Box sx={{ mb: 2 }}>
-                          <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mb: 0.5 }}>
-                            <strong>Areas:</strong>
-                          </Typography>
-                          {task.areas.map(areaId => {
-                            const area = areas.find(a => a.id === areaId);
-                            return area ? <Chip key={areaId} label={area.name} size="small" variant="outlined" sx={{ mr: 0.5 }} /> : null;
-                          })}
-                        </Box>
-                      )}
-
-                      {task.vendor && (
-                        <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mb: 1 }}>
-                          <strong>Vendor:</strong> {task.vendor.name}
-                        </Typography>
-                      )}
-
-                      {task.estimated_price && (
-                        <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mb: 1 }}>
-                          <strong>Est. Price:</strong> {task.currency} {task.estimated_price}
-                        </Typography>
-                      )}
-
-                      {task.final_price && (
-                        <Typography variant="caption" color="success.main" sx={{ display: 'block', fontWeight: 600, mb: 1 }}>
-                          <strong>Final Price:</strong> {task.currency} {task.final_price}
-                        </Typography>
-                      )}
-
-                      {task.attachments && task.attachments.length > 0 && (
-                        <Box sx={{ mt: 1 }}>
-                          {task.attachments.map(attachment => (
-                            <Button
-                              key={attachment.id}
-                              size="small"
-                              startIcon={<DownloadIcon />}
-                              href={attachment.file}
-                              download
-                              fullWidth
-                            >
-                              Download PDF
-                            </Button>
-                          ))}
-                        </Box>
-                      )}
-                    </CardContent>
-                    
-                    <CardActions sx={{ pt: 0 }}>
-                      <Button size="small" startIcon={<EditIcon />} onClick={() => handleOpen(task)}>
-                        Edit
-                      </Button>
-                      <Button size="small" color="error" startIcon={<DeleteIcon />} onClick={() => handleDelete(task.id)}>
-                        Delete
-                      </Button>
-                    </CardActions>
-                  </Card>
-                </Grid>
-              ))}
-            </Grid>
+              {/* Task Detail Panel */}
+              {selectedTask && (
+                <DetailPanel
+                  title="Task Details"
+                  onClose={() => setSelectedTask(null)}
+                  onEdit={() => handleOpen(selectedTask)}
+                  onDelete={() => { handleDelete(selectedTask.id); setSelectedTask(null); }}
+                >
+                  <DetailField label="TITLE" value={selectedTask.description} />
+                  <DetailField label="PRIORITY">
+                    <Chip
+                      label={getPriorityLabel(selectedTask.priority)}
+                      size="small"
+                      sx={{ bgcolor: getPriorityColor(selectedTask.priority), color: 'white', fontWeight: 600 }}
+                    />
+                  </DetailField>
+                  <DetailField label="STATUS">
+                    <Chip
+                      label={getStatusLabel(selectedTask.status)}
+                      size="small"
+                      sx={{ bgcolor: getStatusColor(selectedTask.status), color: 'white', fontWeight: 600 }}
+                    />
+                  </DetailField>
+                  <DetailField
+                    label="DUE DATE"
+                    value={selectedTask.due_date ? new Date(selectedTask.due_date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : 'Not set'}
+                  />
+                  {selectedTask.vendor && (
+                    <DetailField label="VENDOR" value={selectedTask.vendor.name} />
+                  )}
+                  <DetailField
+                    label="ESTIMATED COST"
+                    value={selectedTask.estimated_price ? `${selectedTask.currency} ${selectedTask.estimated_price}` : 'Not specified'}
+                  />
+                  {selectedTask.final_price && (
+                    <DetailField label="ACTUAL COST">
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: '#F44336' }}>
+                        {selectedTask.currency} {selectedTask.final_price}
+                      </Typography>
+                    </DetailField>
+                  )}
+                  {selectedTask.notes && (
+                    <DetailField label="DESCRIPTION" value={selectedTask.notes} />
+                  )}
+                  {selectedTask.attachments && selectedTask.attachments.length > 0 && (
+                    <DetailField label="ATTACHMENTS">
+                      {selectedTask.attachments.map(attachment => (
+                        <Button
+                          key={attachment.id}
+                          size="small"
+                          startIcon={<DownloadIcon />}
+                          href={attachment.file}
+                          download
+                          fullWidth
+                          sx={{ justifyContent: 'flex-start', mb: 1 }}
+                        >
+                          {attachment.filename ? attachment.filename() : 'Download'}
+                        </Button>
+                      ))}
+                    </DetailField>
+                  )}
+                </DetailPanel>
+              )}
+            </Box>
           )}
         </Box>
       )}
@@ -485,6 +799,32 @@ const Tasks = () => {
             variant="outlined"
             sx={{ mb: 2 }}
           />
+
+          <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, mb: 2 }}>
+            <FormControl fullWidth>
+              <InputLabel>Priority</InputLabel>
+              <Select
+                name="priority"
+                value={formData.priority}
+                onChange={handleChange}
+                label="Priority"
+              >
+                <MenuItem value="low">Low</MenuItem>
+                <MenuItem value="medium">Medium</MenuItem>
+                <MenuItem value="high">High</MenuItem>
+              </Select>
+            </FormControl>
+
+            <TextField
+              label="Due Date (Optional)"
+              name="due_date"
+              type="date"
+              value={formData.due_date}
+              onChange={handleChange}
+              InputLabelProps={{ shrink: true }}
+              fullWidth
+            />
+          </Box>
 
           <FormControl fullWidth sx={{ mb: 2 }}>
             <InputLabel>Task Type</InputLabel>
@@ -626,17 +966,6 @@ const Tasks = () => {
 
           <TextField
             margin="dense"
-            label="Currency"
-            name="currency"
-            value={formData.currency}
-            onChange={handleChange}
-            variant="outlined"
-            fullWidth
-            sx={{ mb: 2 }}
-          />
-
-          <TextField
-            margin="dense"
             label="Notes"
             name="notes"
             fullWidth
@@ -673,45 +1002,21 @@ const Tasks = () => {
       </Dialog>
 
       {/* Notification Snackbar */}
-      <Snackbar
+      <NotificationSnackbar
         open={notification.open}
-        autoHideDuration={6000}
+        message={notification.message}
+        severity={notification.severity}
         onClose={handleCloseNotification}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-      >
-        <Alert
-          onClose={handleCloseNotification}
-          severity={notification.severity}
-          sx={{ width: '100%' }}
-        >
-          {notification.message}
-        </Alert>
-      </Snackbar>
+      />
 
       {/* Confirmation Dialog */}
-      <Dialog
+      <ConfirmDialog
         open={confirmDialog.open}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
         onClose={handleConfirmDialogClose}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle sx={{ fontWeight: 600 }}>
-          {confirmDialog.title}
-        </DialogTitle>
-        <DialogContent sx={{ pt: 2 }}>
-          <Typography>{confirmDialog.message}</Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleConfirmDialogClose}>Cancel</Button>
-          <Button
-            onClick={handleConfirmDialogConfirm}
-            variant="contained"
-            color="error"
-          >
-            Delete
-          </Button>
-        </DialogActions>
-      </Dialog>
+        onConfirm={handleConfirmDialogConfirm}
+      />
     </Box>
   );
 };
