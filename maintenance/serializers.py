@@ -1,6 +1,13 @@
 from rest_framework import serializers
 from .models import Property, Area, MaintenanceTask, TaskType, Vendor, Attachment
 
+class PropertySimpleSerializer(serializers.ModelSerializer):
+    """Lightweight property serializer without tasks/areas to avoid circular references"""
+    class Meta:
+        model = Property
+        fields = ['id', 'name', 'address', 'num_floors', 'has_garden', 'image', 'created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at']
+
 class PropertySerializer(serializers.ModelSerializer):
     areas = serializers.SerializerMethodField()
     tasks = serializers.SerializerMethodField()
@@ -58,6 +65,9 @@ class AttachmentSerializer(serializers.ModelSerializer):
 class MaintenanceTaskSerializer(serializers.ModelSerializer):
     attachments = serializers.SerializerMethodField()
     task_type_details = TaskTypeSerializer(source='task_type', read_only=True)
+    vendor_details = VendorSerializer(source='vendor', read_only=True)
+    areas_details = AreaSerializer(source='areas', many=True, read_only=True)
+    property_details = PropertySimpleSerializer(source='property', read_only=True)
 
     class Meta:
         model = MaintenanceTask

@@ -1,0 +1,128 @@
+/* Custom styles for TaskCalendar component */
+
+:global(.rbc-calendar) {
+  font-family: inherit;
+  font-size: 14px;
+  border: none;
+  background: transparent;
+}
+
+:global(.rbc-month-view) {
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  overflow: hidden;
+  background: white;
+}
+
+:global(.rbc-month-row) {
+  min-height: 80px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+:global(.rbc-month-row:last-child) {
+  border-bottom: none;
+}
+
+:global(.rbc-date-cell) {
+  padding: 6px 4px;
+  text-align: right;
+  font-size: 0.9rem;
+  border-right: 1px solid #f0f0f0;
+  background: white;
+}
+
+:global(.rbc-date-cell:last-child) {
+  border-right: none;
+}
+
+:global(.rbc-date-cell.rbc-now) {
+  background-color: #fff3e0;
+  font-weight: 600;
+  color: #e65100;
+}
+
+:global(.rbc-off-range-bg) {
+  background-color: #fafafa;
+}
+
+:global(.rbc-header) {
+  padding: 10px 4px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  background-color: white;
+  border-bottom: 2px solid #e0e0e0;
+  border-right: 1px solid #f0f0f0;
+  color: #333;
+}
+
+:global(.rbc-header:last-child) {
+  border-right: none;
+}
+
+:global(.rbc-today) {
+  background-color: #fff9e6;
+}
+
+:global(.rbc-event) {
+  background: none !important;
+  padding: 2px 4px !important;
+  margin: 2px 2px !important;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 0.7rem;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+:global(.rbc-event:hover) {
+  opacity: 0.9 !important;
+  transform: scale(1.02);
+}
+
+:global(.rbc-event-content) {
+  white-space: normal !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  padding: 2px 0;
+}
+
+:global(.rbc-day-bg) {
+  padding: 4px;
+}
+
+:global(.rbc-time-slot) {
+  display: none;
+}
+
+:global(.rbc-toolbar) {
+  display: none;
+}
+
+/* Smooth scrolling for event overflow */
+:global(.rbc-day-bg) {
+  overflow-y: auto;
+  max-height: 75px;
+}
+
+/* Make the calendar cell content area scrollable */
+:global(.rbc-day-bg)::-webkit-scrollbar {
+  width: 4px;
+}
+
+:global(.rbc-day-bg)::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+:global(.rbc-day-bg)::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 2px;
+}
+
+:global(.rbc-day-bg)::-webkit-scrollbar-thumb:hover {
+  background: #999;
+}
+

@@ -32,6 +32,7 @@ import {
   Approval as ApprovalIcon,
 } from '@mui/icons-material';
 import PageHeader from './Layout/PageHeader';
+import TaskCalendar from './TaskCalendar';
 
 const StatCard = ({ title, value, subtitle, icon: Icon, color, bgcolor, borderColor }) => {
   return (
@@ -222,20 +223,15 @@ const Dashboard = () => {
           </Card>
         </Grid>
 
-        {/* Maintenance Calendar - Placeholder */}
+        {/* Maintenance Calendar */}
         <Grid item xs={12} lg={4}>
           <Card sx={{ height: '100%', minHeight: 450, display: 'flex', flexDirection: 'column' }}>
             <CardHeader
               title="Maintenance Calendar"
               titleTypographyProps={{ variant: 'h6' }}
             />
-            <CardContent sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Box sx={{ textAlign: 'center', color: 'textSecondary' }}>
-                <MaintenanceIcon sx={{ fontSize: 48, mb: 2, opacity: 0.5 }} />
-                <Typography color="textSecondary">
-                  Calendar feature coming soon
-                </Typography>
-              </Box>
+            <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              <TaskCalendar tasks={tasks} />
             </CardContent>
           </Card>
         </Grid>

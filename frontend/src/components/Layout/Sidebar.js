@@ -34,7 +34,7 @@ const Sidebar = ({ open, setOpen }) => {
   const menuItems = [
     { path: '/', label: 'Dashboard', icon: DashboardIcon },
     { path: '/properties', label: 'Properties', icon: PropertiesIcon },
-    { path: '/areas', label: 'Areas', icon: ComponentsIcon },
+    { path: '/areas', label: 'Rooms', icon: ComponentsIcon },
     { path: '/tasks', label: 'Tasks', icon: TasksIcon },
     { path: '/vendors', label: 'Vendors', icon: VendorsIcon },
     { path: '/tasktypes', label: 'Task Types', icon: CategoryIcon },
