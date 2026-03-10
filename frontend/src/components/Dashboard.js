@@ -33,6 +33,7 @@ import {
 } from '@mui/icons-material';
 import PageHeader from './Layout/PageHeader';
 import TaskCalendar from './TaskCalendar';
+import TaskDetailModal from './TaskDetailModal';
 
 const StatCard = ({ title, value, subtitle, icon: Icon, color, bgcolor, borderColor }) => {
   return (
@@ -78,6 +79,7 @@ const Dashboard = () => {
   const [vendors, setVendors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [selectedTask, setSelectedTask] = useState(null);
 
   useEffect(() => {
     fetchDashboardData();
@@ -239,53 +241,59 @@ const Dashboard = () => {
 
       {/* Bottom Sections */}
       <Grid container spacing={3}>
-        {/* Active Work Orders */}
+        {/* Upcoming Tasks */}
         <Grid item xs={12} md={6}>
           <Card sx={{ height: '100%', minHeight: 350, display: 'flex', flexDirection: 'column' }}>
             <CardHeader
-              title="Active Work Orders"
+              title="Upcoming Tasks"
               titleTypographyProps={{ variant: 'h6' }}
             />
             <CardContent sx={{ flexGrow: 1, overflow: 'auto' }}>
-              <TableContainer>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell sx={{ fontWeight: 600 }}>Order</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>Property</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {tasks.filter(t => t.status !== 'finished').length > 0 ? (
-                      tasks.filter(t => t.status !== 'finished').slice(0, 5).map(task => (
-                        <TableRow key={task.id}>
-                          <TableCell variant="body" sx={{ fontSize: 'small' }}>
-                            {task.description?.substring(0, 20)}...
-                          </TableCell>
-                          <TableCell variant="body" sx={{ fontSize: 'small' }}>
-                            {task.property?.name || 'N/A'}
-                          </TableCell>
-                          <TableCell>
-                            <Chip 
-                              label={task.status === 'pending' ? 'Pending' : 'In Progress'}
-                              size="small"
-                              variant="filled"
-                              color={task.status === 'pending' ? 'warning' : 'info'}
-                            />
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    ) : (
-                      <TableRow>
-                        <TableCell colSpan={3} sx={{ textAlign: 'center', py: 2, color: 'textSecondary' }}>
-                          No active work orders
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </TableContainer>
+              {tasks.filter(t => t.status !== 'finished').length > 0 ? (
+                <List sx={{ p: 0 }}>
+                  {tasks
+                    .filter(t => t.status !== 'finished')
+                    .slice(0, 5)
+                    .map((task, index) => (
+                      <ListItem
+                        key={task.id}
+                        onClick={() => setSelectedTask(task)}
+                        sx={{
+                          px: 0,
+                          py: 1.5,
+                          borderBottom: index < tasks.filter(t => t.status !== 'finished').slice(0, 5).length - 1 ? '1px solid #eee' : 'none',
+                          cursor: 'pointer',
+                          '&:hover': { backgroundColor: '#f5f5f5' },
+                        }}
+                      >
+                        <ListItemText
+                          primary={
+                            <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                              {task.description}
+                            </Typography>
+                          }
+                          secondary={
+                            <Box sx={{ mt: 0.5, display: 'flex', gap: 1, alignItems: 'center' }}>
+                              <Typography variant="caption" sx={{ color: 'textSecondary' }}>
+                                {task.property_details?.name || 'N/A'}
+                              </Typography>
+                              <Chip
+                                label={task.status === 'pending' ? 'Pending' : 'In Progress'}
+                                size="small"
+                                color={task.status === 'pending' ? 'warning' : 'info'}
+                                variant="filled"
+                              />
+                            </Box>
+                          }
+                        />
+                      </ListItem>
+                    ))}
+                </List>
+              ) : (
+                <Typography color="textSecondary" sx={{ textAlign: 'center', py: 4 }}>
+                  No upcoming tasks
+                </Typography>
+              )}
             </CardContent>
           </Card>
         </Grid>
@@ -320,6 +328,13 @@ const Dashboard = () => {
           </Card>
         </Grid>
       </Grid>
+
+      {/* Task Detail Modal */}
+      <TaskDetailModal
+        open={selectedTask !== null}
+        task={selectedTask}
+        onClose={() => setSelectedTask(null)}
+      />
     </Box>
   );
 };

@@ -128,6 +128,22 @@ const TaskDetailModal = ({ open, task, onClose }) => {
           />
         )}
 
+        {/* Custom Fields */}
+        {task.task_type_details?.custom_field_definitions?.length > 0 && task.custom_field_values && (
+          <Box sx={{ mt: 2, mb: 2, p: 2, border: '1px solid #e0e0e0', borderRadius: 1, backgroundColor: 'rgba(0,0,0,0.01)' }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1.5 }}>
+              {task.task_type_details.name} Details
+            </Typography>
+            {task.task_type_details.custom_field_definitions.map((fieldName) => (
+              <DetailField
+                key={fieldName}
+                label={fieldName.toUpperCase()}
+                value={task.custom_field_values[fieldName] || 'Not specified'}
+              />
+            ))}
+          </Box>
+        )}
+
         {/* Vendor */}
         {task.vendor_details && (
           <DetailField
