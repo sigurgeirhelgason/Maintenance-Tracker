@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Drawer,
   Box,
@@ -13,6 +13,7 @@ import {
   IconButton,
   useTheme,
   useMediaQuery,
+  Button,
 } from '@mui/material';
 import {
   Dashboard as DashboardIcon,
@@ -24,12 +25,21 @@ import {
   Category as CategoryIcon,
   Menu as MenuIcon,
   Close as CloseIcon,
+  Logout as LogoutIcon,
 } from '@mui/icons-material';
+import { useAuth } from '../../AuthContext';
 
 const Sidebar = ({ open, setOpen }) => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { logout, user } = useAuth();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
 
   const menuItems = [
     { path: '/', label: 'Dashboard', icon: DashboardIcon },
@@ -118,7 +128,25 @@ const Sidebar = ({ open, setOpen }) => {
 
       {/* Footer */}
       <Box sx={{ p: 2, borderTop: `1px solid ${theme.palette.divider}` }}>
-        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+        {user && (
+          <>
+            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 1 }}>
+              {user.username}
+            </Typography>
+            <Button
+              fullWidth
+              variant="outlined"
+              color="error"
+              size="small"
+              startIcon={<LogoutIcon />}
+              onClick={handleLogout}
+              sx={{ mb: 1 }}
+            >
+              {open ? 'Logout' : ''}
+            </Button>
+          </>
+        )}
+        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', fontSize: '0.7rem' }}>
           © 2026 Property Maintenance
         </Typography>
       </Box>

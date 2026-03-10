@@ -178,52 +178,52 @@ const Dashboard = () => {
 
       {/* Main Content Grid */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
-        {/* Properties Overview */}
-        <Grid item xs={12} lg={8}>
-          <Card sx={{ height: '100%', minHeight: 450, display: 'flex', flexDirection: 'column' }}>
-            <CardHeader
-              title="Properties Overview"
-              action={<Button size="small">View All →</Button>}
-              titleTypographyProps={{ variant: 'h6' }}
-            />
-            <CardContent sx={{ flexGrow: 1 }}>
-              <Grid container spacing={2}>
-                {properties.length > 0 ? (
-                  properties.map(property => (
-                    <Grid item xs={12} sm={6} md={4} key={property.id}>
-                      <Card sx={{ cursor: 'pointer', '&:hover': { boxShadow: 2 } }}>
-                        <Box sx={{ height: 100, bgcolor: '#667eea', backgroundImage: property.image ? `url(${property.image})` : '', backgroundSize: 'cover', backgroundPosition: 'center' }} />
-                        <CardContent sx={{ pb: 1 }}>
-                          <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                            {property.name}
-                          </Typography>
-                          <Box sx={{ display: 'flex', justifyContent: 'space-around', pt: 1 }}>
-                            <Box sx={{ textAlign: 'center' }}>
-                              <Typography variant="h6" sx={{ fontWeight: 700, color: '#2196f3' }}>
-                                {property.areas?.length || 0}
-                              </Typography>
-                              <Typography variant="caption">Units</Typography>
-                            </Box>
-                            <Box sx={{ textAlign: 'center' }}>
-                              <Typography variant="h6" sx={{ fontWeight: 700, color: '#f44336' }}>
-                                {property.tasks?.filter(t => t.status !== 'finished').length || 0}
-                              </Typography>
-                              <Typography variant="caption">Issues</Typography>
-                            </Box>
-                          </Box>
-                        </CardContent>
-                      </Card>
-                    </Grid>
-                  ))
-                ) : (
-                  <Typography color="textSecondary" sx={{ p: 2 }}>No properties yet</Typography>
-                )}
-              </Grid>
-            </CardContent>
-          </Card>
-        </Grid>
+         {/* Properties Overview */}
+          <Grid item xs={12} lg={8}>
+            <Card sx={{ height: '100%', minHeight: 450, display: 'flex', flexDirection: 'column' }}>
+              <CardHeader
+                title="Properties Overview"
+                action={<Button size="small">View All →</Button>}
+                titleTypographyProps={{ variant: 'h6' }}
+              />
+              <CardContent sx={{ flexGrow: 1 }}>
+                <Grid container spacing={2}>
+            {properties.length > 0 ? (
+              properties.map(property => (
+                <Grid item xs={12} sm={6} md={4} key={property.id}>
+                  <Card sx={{ height: 450, cursor: 'pointer', '&:hover': { boxShadow: 2 }, display: 'flex', flexDirection: 'column' }}>
+              <Box sx={{ height: 300, bgcolor: '#667eea', backgroundImage: property.image ? `url(${property.image})` : '', backgroundSize: 'cover', backgroundPosition: 'center' }} />
+              <CardContent sx={{ pb: 1, flexGrow: 1 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                  {property.name}
+                </Typography>
+                <Box sx={{ display: 'flex', justifyContent: 'space-around', pt: 1 }}>
+                  <Box sx={{ textAlign: 'center' }}>
+                    <Typography variant="h6" sx={{ fontWeight: 700, color: '#2196f3' }}>
+                {property.areas?.length || 0}
+                    </Typography>
+                    <Typography variant="caption">Units</Typography>
+                  </Box>
+                  <Box sx={{ textAlign: 'center' }}>
+                    <Typography variant="h6" sx={{ fontWeight: 700, color: '#f44336' }}>
+                {property.tasks?.filter(t => t.status !== 'finished').length || 0}
+                    </Typography>
+                    <Typography variant="caption">Issues</Typography>
+                  </Box>
+                </Box>
+              </CardContent>
+                  </Card>
+                </Grid>
+              ))
+            ) : (
+              <Typography color="textSecondary" sx={{ p: 2 }}>No properties yet</Typography>
+            )}
+                </Grid>
+              </CardContent>
+            </Card>
+          </Grid>
 
-        {/* Maintenance Calendar */}
+          {/* Maintenance Calendar */}
         <Grid item xs={12} lg={4}>
           <Card sx={{ height: '100%', minHeight: 450, display: 'flex', flexDirection: 'column' }}>
             <CardHeader
