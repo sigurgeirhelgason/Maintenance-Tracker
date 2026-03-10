@@ -80,6 +80,9 @@ class TaskTypeSerializer(serializers.ModelSerializer):
         read_only_fields = ['created_at']
 
 class VendorSerializer(serializers.ModelSerializer):
+    task_type_details = TaskTypeSerializer(source='task_type', read_only=True)
+    secondary_task_types_details = TaskTypeSerializer(source='secondary_task_types', many=True, read_only=True)
+    
     class Meta:
         model = Vendor
         fields = '__all__'

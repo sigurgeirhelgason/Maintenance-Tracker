@@ -68,6 +68,9 @@ class Vendor(models.Model):
     phone = models.CharField(max_length=20, blank=True)
     email = models.EmailField(blank=True)
     address = models.TextField(blank=True)
+    favorite = models.BooleanField(default=False)
+    task_type = models.ForeignKey(TaskType, on_delete=models.SET_NULL, null=True, blank=True, related_name='vendors')
+    secondary_task_types = models.ManyToManyField(TaskType, related_name='vendors_secondary', blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

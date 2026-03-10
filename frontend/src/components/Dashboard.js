@@ -264,28 +264,24 @@ const Dashboard = () => {
                           borderBottom: index < tasks.filter(t => t.status !== 'finished').slice(0, 5).length - 1 ? '1px solid #eee' : 'none',
                           cursor: 'pointer',
                           '&:hover': { backgroundColor: '#f5f5f5' },
+                          display: 'flex',
+                          flexDirection: 'column',
                         }}
                       >
-                        <ListItemText
-                          primary={
-                            <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                              {task.description}
-                            </Typography>
-                          }
-                          secondary={
-                            <Box sx={{ mt: 0.5, display: 'flex', gap: 1, alignItems: 'center' }}>
-                              <Typography variant="caption" sx={{ color: 'textSecondary' }}>
-                                {task.property_details?.name || 'N/A'}
-                              </Typography>
-                              <Chip
-                                label={task.status === 'pending' ? 'Pending' : 'In Progress'}
-                                size="small"
-                                color={task.status === 'pending' ? 'warning' : 'info'}
-                                variant="filled"
-                              />
-                            </Box>
-                          }
-                        />
+                        <Typography variant="body2" sx={{ fontWeight: 500, mb: 0.5 }}>
+                          {task.description}
+                        </Typography>
+                        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                          <Typography variant="caption" sx={{ color: 'textSecondary' }}>
+                            {task.property_details?.name || 'N/A'}
+                          </Typography>
+                          <Chip
+                            label={task.status === 'pending' ? 'Pending' : 'In Progress'}
+                            size="small"
+                            color={task.status === 'pending' ? 'warning' : 'info'}
+                            variant="filled"
+                          />
+                        </Box>
                       </ListItem>
                     ))}
                 </List>
@@ -298,18 +294,18 @@ const Dashboard = () => {
           </Card>
         </Grid>
 
-        {/* Vendor Contacts */}
+        {/* Favorite Vendor Contacts */}
         <Grid item xs={12} md={6}>
           <Card sx={{ height: '100%', minHeight: 350, display: 'flex', flexDirection: 'column' }}>
             <CardHeader
-              title="Vendor Contacts"
+              title="Favorite Vendors"
               titleTypographyProps={{ variant: 'h6' }}
             />
             <CardContent sx={{ flexGrow: 1, overflow: 'auto' }}>
-              {vendors.length > 0 ? (
+              {vendors.filter(v => v.favorite).length > 0 ? (
                 <List>
-                  {vendors.map((vendor, index) => (
-                    <ListItem key={vendor.id} sx={{ px: 0, py: 1, borderBottom: index < vendors.length - 1 ? '1px solid #eee' : 'none' }}>
+                  {vendors.filter(v => v.favorite).slice(0, 5).map((vendor, index) => (
+                    <ListItem key={vendor.id} sx={{ px: 0, py: 1, borderBottom: index < vendors.filter(v => v.favorite).slice(0, 5).length - 1 ? '1px solid #eee' : 'none' }}>
                       <ListItemText
                         primary={
                           <Typography variant="body2" sx={{ fontWeight: 500 }}>
@@ -322,7 +318,7 @@ const Dashboard = () => {
                   ))}
                 </List>
               ) : (
-                <Typography color="textSecondary">No vendors added yet</Typography>
+                <Typography color="textSecondary">No favorite vendors yet. Mark vendors as favorites in the Vendors page.</Typography>
               )}
             </CardContent>
           </Card>
