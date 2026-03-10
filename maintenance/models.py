@@ -88,7 +88,7 @@ class MaintenanceTask(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='tasks', null=True, blank=True)
     property = models.ForeignKey(Property, on_delete=models.CASCADE, related_name='tasks', null=True, blank=True)
     areas = models.ManyToManyField(Area, related_name='tasks', blank=True)
-    description = models.TextField()
+    description = models.TextField(null=True, blank=True)
     task_type = models.ForeignKey(TaskType, on_delete=models.SET_NULL, null=True, blank=True)
     vendor = models.ForeignKey(Vendor, on_delete=models.SET_NULL, null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')

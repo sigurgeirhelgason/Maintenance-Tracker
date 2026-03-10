@@ -237,6 +237,8 @@ const Tasks = () => {
       setEditing(task);
       setFormData({
         ...task,
+        estimated_price: task.estimated_price || '',
+        final_price: task.final_price || '',
         custom_field_values: task.custom_field_values || {},
       });
     } else {
@@ -285,7 +287,7 @@ const Tasks = () => {
 
   const handleSave = async () => {
     if (!formData.description.trim()) {
-      showNotification('Task description is required', 'warning');
+      showNotification('Task title is required', 'warning');
       return;
     }
 
@@ -789,7 +791,7 @@ const Tasks = () => {
           <TextField
             autoFocus
             margin="dense"
-            label="Task Description"
+            label="Task title"
             name="description"
             fullWidth
             multiline

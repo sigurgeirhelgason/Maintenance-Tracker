@@ -67,7 +67,7 @@ const TaskDetailModal = ({ open, task, onClose }) => {
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography variant="h6">Task Details</Typography>
+        Task Details
         <Button size="small" onClick={onClose} sx={{ minWidth: 'auto' }}>
           <CloseIcon />
         </Button>

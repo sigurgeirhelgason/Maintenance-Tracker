@@ -230,21 +230,15 @@ const TaskTypes = () => {
                       <ListItemButton sx={{ borderRadius: 1 }}>
                         <ListItemText
                           primary={type.name}
-                          secondary={
-                            <Box component="span">
-                              <Typography variant="body2" component="span" color="text.secondary">
-                                {type.is_predefined ? 'System Default' : 'User Created'}
-                              </Typography>
-                              {type.custom_field_definitions?.length > 0 && (
-                                <Box sx={{ mt: 1, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                                  {type.custom_field_definitions.map((field, idx) => (
-                                    <Chip key={idx} label={field} size="small" variant="outlined" />
-                                  ))}
-                                </Box>
-                              )}
-                            </Box>
-                          }
+                          secondary={type.is_predefined ? 'System Default' : 'User Created'}
                         />
+                        {type.custom_field_definitions?.length > 0 && (
+                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, ml: 2 }}>
+                            {type.custom_field_definitions.map((field, idx) => (
+                              <Chip key={idx} label={field} size="small" variant="outlined" />
+                            ))}
+                          </Box>
+                        )}
                         {!type.is_predefined && (
                           <ListItemSecondaryAction>
                             <IconButton 

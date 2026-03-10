@@ -17,7 +17,7 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='maintenancetask',
             name='currency',
-            field=models.CharField(blank=True, default='Krónur', max_length=3),
+            field=models.CharField(blank=True, default='ISK', max_length=3),
         ),
         migrations.AlterField(
             model_name='tasktype',
