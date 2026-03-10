@@ -1,8 +1,10 @@
 from django.db import models
 from django.core.validators import MinValueValidator
+from django.contrib.auth.models import User
 import os
 
 class Property(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='properties', null=True, blank=True)
     name = models.CharField(max_length=255)
     address = models.TextField()
     num_floors = models.IntegerField(default=1, validators=[MinValueValidator(1)])
@@ -60,6 +62,7 @@ class TaskType(models.Model):
         return self.name
 
 class Vendor(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='vendors', null=True, blank=True)
     name = models.CharField(max_length=255)
     contact_person = models.CharField(max_length=255, blank=True)
     phone = models.CharField(max_length=20, blank=True)
@@ -82,6 +85,7 @@ class MaintenanceTask(models.Model):
         ('medium', 'Medium'),
         ('high', 'High'),
     ]
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='tasks', null=True, blank=True)
     property = models.ForeignKey(Property, on_delete=models.CASCADE, related_name='tasks', null=True, blank=True)
     areas = models.ManyToManyField(Area, related_name='tasks', blank=True)
     description = models.TextField()
@@ -110,6 +114,7 @@ class MaintenanceTask(models.Model):
         return f"{self.description} - {self.get_status_display()}"
 
 class Attachment(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='attachments', null=True, blank=True)
     task = models.ForeignKey(MaintenanceTask, on_delete=models.CASCADE, related_name='attachments', null=True, blank=True)
     file = models.FileField(upload_to='task_attachments/')
     uploaded_at = models.DateTimeField(auto_now_add=True)

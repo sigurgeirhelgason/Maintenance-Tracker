@@ -34,8 +34,8 @@ class PropertySimpleSerializer(serializers.ModelSerializer):
     """Lightweight property serializer without tasks/areas to avoid circular references"""
     class Meta:
         model = Property
-        fields = ['id', 'name', 'address', 'num_floors', 'has_garden', 'image', 'created_at', 'updated_at']
-        read_only_fields = ['created_at', 'updated_at']
+        fields = ['id', 'user', 'name', 'address', 'num_floors', 'has_garden', 'image', 'created_at', 'updated_at']
+        read_only_fields = ['user', 'created_at', 'updated_at']
 
 class PropertySerializer(serializers.ModelSerializer):
     areas = serializers.SerializerMethodField()
@@ -44,7 +44,7 @@ class PropertySerializer(serializers.ModelSerializer):
     class Meta:
         model = Property
         fields = '__all__'
-        read_only_fields = ['created_at', 'updated_at']
+        read_only_fields = ['user', 'created_at', 'updated_at']
 
     def get_areas(self, obj):
         areas = obj.areas.all()
@@ -83,13 +83,13 @@ class VendorSerializer(serializers.ModelSerializer):
     class Meta:
         model = Vendor
         fields = '__all__'
-        read_only_fields = ['created_at', 'updated_at']
+        read_only_fields = ['user', 'created_at', 'updated_at']
 
 class AttachmentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Attachment
         fields = '__all__'
-        read_only_fields = ['uploaded_at']
+        read_only_fields = ['user', 'uploaded_at']
 
 class MaintenanceTaskSerializer(serializers.ModelSerializer):
     attachments = serializers.SerializerMethodField()
@@ -101,7 +101,7 @@ class MaintenanceTaskSerializer(serializers.ModelSerializer):
     class Meta:
         model = MaintenanceTask
         fields = '__all__'
-        read_only_fields = ['created_at', 'updated_at', 'created_date']
+        read_only_fields = ['user', 'created_at', 'updated_at', 'created_date']
 
     def get_attachments(self, obj):
         return AttachmentSerializer(obj.attachments.all(), many=True).data

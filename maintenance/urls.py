@@ -8,12 +8,12 @@ from .views import (
 )
 
 router = DefaultRouter()
-router.register(r'properties', PropertyViewSet)
-router.register(r'areas', AreaViewSet)
-router.register(r'tasktypes', TaskTypeViewSet)
-router.register(r'tasks', MaintenanceTaskViewSet)
-router.register(r'vendors', VendorViewSet)
-router.register(r'attachments', AttachmentViewSet)
+router.register(r'properties', PropertyViewSet, basename='property')
+router.register(r'areas', AreaViewSet, basename='area')
+router.register(r'tasktypes', TaskTypeViewSet, basename='tasktype')
+router.register(r'tasks', MaintenanceTaskViewSet, basename='maintenancetask')
+router.register(r'vendors', VendorViewSet, basename='vendor')
+router.register(r'attachments', AttachmentViewSet, basename='attachment')
 
 urlpatterns = [
     # Authentication endpoints

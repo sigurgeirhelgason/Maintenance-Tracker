@@ -13,19 +13,29 @@ from .serializers import (
 )
 
 class PropertyViewSet(viewsets.ModelViewSet):
-    queryset = Property.objects.all()
     serializer_class = PropertySerializer
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     ordering_fields = ['name', 'created_at']
     permission_classes = [IsAuthenticated]
 
+    def get_queryset(self):
+        # Only return properties for the current user
+        return Property.objects.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        # Automatically set the current user
+        serializer.save(user=self.request.user)
+
 class AreaViewSet(viewsets.ModelViewSet):
-    queryset = Area.objects.all()
     serializer_class = AreaSerializer
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_fields = ['property']
     ordering_fields = ['name', 'created_at']
     permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        # Only return areas for properties owned by the current user
+        return Area.objects.filter(property__user=self.request.user)
 
 class TaskTypeViewSet(viewsets.ModelViewSet):
     queryset = TaskType.objects.all()
@@ -36,28 +46,49 @@ class TaskTypeViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
 class VendorViewSet(viewsets.ModelViewSet):
-    queryset = Vendor.objects.all()
     serializer_class = VendorSerializer
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_fields = ['name']
     ordering_fields = ['name', 'created_at']
     permission_classes = [IsAuthenticated]
 
+    def get_queryset(self):
+        # Only return vendors for the current user
+        return Vendor.objects.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        # Automatically set the current user
+        serializer.save(user=self.request.user)
+
 class MaintenanceTaskViewSet(viewsets.ModelViewSet):
-    queryset = MaintenanceTask.objects.all()
     serializer_class = MaintenanceTaskSerializer
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_fields = ['property', 'status', 'task_type', 'vendor']
     ordering_fields = ['created_date', 'created_at']
     permission_classes = [IsAuthenticated]
 
+    def get_queryset(self):
+        # Only return tasks for the current user
+        return MaintenanceTask.objects.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        # Automatically set the current user
+        serializer.save(user=self.request.user)
+
 class AttachmentViewSet(viewsets.ModelViewSet):
-    queryset = Attachment.objects.all()
     serializer_class = AttachmentSerializer
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_fields = ['task']
     ordering_fields = ['uploaded_at']
     permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        # Only return attachments for the current user
+        return Attachment.objects.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        # Automatically set the current user
+        serializer.save(user=self.request.user)
 # Authentication Views
 @api_view(['POST'])
 @permission_classes([AllowAny])
