@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Drawer,
@@ -35,6 +35,15 @@ const Sidebar = ({ open, setOpen }) => {
   const { logout, user } = useAuth();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const prevIsMobileRef = useRef(isMobile);
+
+  // Auto-close mobile drawer only when transitioning from mobile to desktop
+  useEffect(() => {
+    if (prevIsMobileRef.current === true && isMobile === false && open) {
+      setOpen(false);
+    }
+    prevIsMobileRef.current = isMobile;
+  }, [isMobile]);
 
   const handleLogout = () => {
     logout();
