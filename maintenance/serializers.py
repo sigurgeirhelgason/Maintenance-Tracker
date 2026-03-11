@@ -106,5 +106,21 @@ class MaintenanceTaskSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ['user', 'created_at', 'updated_at', 'created_date']
 
+    def validate(self, data):
+        """Validate that final_price can only be set when status is 'finished'"""
+        final_price = data.get('final_price')
+        status = data.get('status')
+        
+        # If updating, also check the instance's current status if status is not being changed
+        if self.instance:
+            status = status or self.instance.status
+        
+        if final_price is not None and final_price > 0 and status != 'finished':
+            raise serializers.ValidationError(
+                {'final_price': 'Final price can only be set when task status is "Finished".'}
+            )
+        
+        return data
+
     def get_attachments(self, obj):
         return AttachmentSerializer(obj.attachments.all(), many=True).data
