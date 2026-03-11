@@ -41,13 +41,13 @@ start-backend:
 start-frontend:
     cd frontend && npm run dev
 
-start-all:
+start:
     @echo "Starting both servers..."
     start /B python manage.py runserver
     timeout /t 2 /nobreak > nul
     cd frontend && npm run dev
 
-stop-all:
+stop:
     @echo "Stopping all servers..."
     -taskkill /F /IM python.exe /T 2>nul
     -taskkill /F /IM node.exe /T 2>nul
