@@ -21,6 +21,10 @@ import {
   TableHead,
   TableRow,
   Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from '@mui/material';
 import {
   Schedule as PendingIcon,
@@ -29,13 +33,14 @@ import {
   Apartment as PropertiesIcon,
   Work as WorkIcon,
   Notifications as MaintenanceIcon,
-  Approval as ApprovalIcon,
+  LocalOffer as RefundIcon,
 } from '@mui/icons-material';
 import PageHeader from './Layout/PageHeader';
 import TaskCalendar from './TaskCalendar';
 import TaskDetailModal from './TaskDetailModal';
+import VendorDetailModal from './VendorDetailModal';
 
-const StatCard = ({ title, value, subtitle, icon: Icon, color, bgcolor, borderColor }) => {
+const StatCard = ({ title, value, subtitle, icon: Icon, color, bgcolor, borderColor, onClick }) => {
   return (
     <Card sx={{ 
       height: '100%',
@@ -43,7 +48,14 @@ const StatCard = ({ title, value, subtitle, icon: Icon, color, bgcolor, borderCo
       borderTop: `3px solid ${color}`,
       display: 'flex',
       flexDirection: 'column',
-    }}>
+      cursor: 'pointer',
+      transition: 'all 0.2s ease',
+      '&:hover': {
+        boxShadow: 3,
+        transform: 'translateY(-4px)',
+      },
+    }}
+    onClick={onClick}>
       <CardContent sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1 }}>
         <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 2 }}>
           <Box>
@@ -71,8 +83,8 @@ const Dashboard = () => {
     openWorkOrders: 0,
     overdueTasks: 0,
     upcomingMaintenance: 0,
-    pendingApprovals: 0,
-    totalProperties: 0,
+    possibleRefund: 0,
+    totalInvestmentThisYear: 0,
   });
   const [properties, setProperties] = useState([]);
   const [tasks, setTasks] = useState([]);
@@ -80,6 +92,10 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedTask, setSelectedTask] = useState(null);
+  const [statsModalOpen, setStatsModalOpen] = useState(false);
+  const [selectedStatsCategory, setSelectedStatsCategory] = useState(null);
+  const [selectedVendor, setSelectedVendor] = useState(null);
+  const [vendorDetailModalOpen, setVendorDetailModalOpen] = useState(false);
 
   useEffect(() => {
     fetchDashboardData();
@@ -102,6 +118,34 @@ const Dashboard = () => {
       // Calculate stats
       const openWorkOrders = tasks.filter(t => t.status !== 'finished').length;
       const overdueTasks = tasks.filter(t => t.status !== 'finished' && t.created_date).length; // Simplified for now
+      
+      // Calculate possible VAT refund (35% of work price for finished tasks not yet claimed)
+      const finishedTasks = tasks.filter(
+        t => t.status === 'finished' && !t.vat_refund_claimed
+      );
+      const totalVatRefundablePrice = finishedTasks.reduce((sum, t) => {
+        // Calculate from price_breakdown if available
+        if (t.price_breakdown && t.price_breakdown.length > 0) {
+          const vatRefundable = t.price_breakdown
+            .filter(item => item.vat_refundable)
+            .reduce((itemSum, item) => itemSum + (parseFloat(item.amount) || 0), 0);
+          return sum + vatRefundable;
+        }
+        // Fall back to final_work_price for backward compatibility
+        return sum + (parseFloat(t.final_work_price) || 0);
+      }, 0);
+      const possibleRefund = Math.floor(totalVatRefundablePrice * 0.35);
+
+      // Calculate total investment this year (sum of final_price for tasks created this year)
+      const currentYear = new Date().getFullYear();
+      const tasksThisYear = tasks.filter(t => {
+        if (!t.created_date) return false;
+        const taskYear = new Date(t.created_date).getFullYear();
+        return taskYear === currentYear;
+      });
+      const totalInvestmentThisYear = tasksThisYear.reduce((sum, t) => {
+        return sum + (parseFloat(t.final_price) || 0);
+      }, 0);
 
       setTasks(tasks.slice(0, 10));
       setProperties(properties.slice(0, 3));
@@ -111,8 +155,8 @@ const Dashboard = () => {
         openWorkOrders,
         overdueTasks: Math.floor(openWorkOrders * 0.3), // Placeholder calculation
         upcomingMaintenance: Math.floor(openWorkOrders * 0.5), // Placeholder calculation
-        pendingApprovals: Math.floor(openWorkOrders * 0.2), // Placeholder calculation
-        totalProperties: properties.length,
+        possibleRefund,
+        totalInvestmentThisYear,
       });
     } catch (err) {
       setError('Failed to load dashboard data');
@@ -149,6 +193,10 @@ const Dashboard = () => {
             subtitle={`${stats.overdueTasks} Overdue`}
             icon={WorkIcon}
             color="#2196f3"
+            onClick={() => {
+              setSelectedStatsCategory('openWorkOrders');
+              setStatsModalOpen(true);
+            }}
           />
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
@@ -158,22 +206,32 @@ const Dashboard = () => {
             subtitle="This Week"
             icon={MaintenanceIcon}
             color="#4caf50"
+            onClick={() => {
+              setSelectedStatsCategory('upcomingMaintenance');
+              setStatsModalOpen(true);
+            }}
           />
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
           <StatCard
-            title="Pending Approvals"
-            value={stats.pendingApprovals}
-            icon={ApprovalIcon}
-            color="#ff9800"
+            title="Possible VAT Refund"
+            value={`${stats.possibleRefund.toLocaleString('is-IS')} Kr.`}
+            subtitle="35% of work price"
+            icon={RefundIcon}
+            color="#4caf50"
+            onClick={() => {
+              setSelectedStatsCategory('possibleRefund');
+              setStatsModalOpen(true);
+            }}
           />
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
           <StatCard
-            title="Total Properties"
-            value={stats.totalProperties}
-            icon={PropertiesIcon}
-            color="#9c27b0"
+            title="Total Investment This Year"
+            value={`${stats.totalInvestmentThisYear.toLocaleString('is-IS')} Kr.`}
+            subtitle="Based on final prices"
+            icon={WorkIcon}
+            color="#2196f3"
           />
         </Grid>
       </Grid>
@@ -265,23 +323,29 @@ const Dashboard = () => {
                           cursor: 'pointer',
                           '&:hover': { backgroundColor: '#f5f5f5' },
                           display: 'flex',
-                          flexDirection: 'column',
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 2,
                         }}
                       >
-                        <Typography variant="body2" sx={{ fontWeight: 500, mb: 0.5 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 500, flex: 1.5, minWidth: 0 }}>
                           {task.description}
                         </Typography>
-                        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                          <Typography variant="caption" sx={{ color: 'textSecondary' }}>
-                            {task.property_details?.name || 'N/A'}
-                          </Typography>
-                          <Chip
-                            label={task.status === 'pending' ? 'Pending' : 'In Progress'}
-                            size="small"
-                            color={task.status === 'pending' ? 'warning' : 'info'}
-                            variant="filled"
-                          />
-                        </Box>
+                        <Typography variant="caption" sx={{ color: 'textSecondary', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>
+                          {task.property_details?.name || 'N/A'}
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: 'textSecondary', whiteSpace: 'nowrap', flex: 0.8 }}>
+                          {task.vendor_details?.name || '-'}
+                        </Typography>
+                        <Typography variant="caption" sx={{ fontWeight: 500, whiteSpace: 'nowrap', flex: 0.7 }}>
+                          {task.cost ? `$${task.cost.toFixed(2)}` : '-'}
+                        </Typography>
+                        <Chip
+                          label={task.status === 'pending' ? 'Pending' : 'In Progress'}
+                          size="small"
+                          color={task.status === 'pending' ? 'warning' : 'info'}
+                          variant="filled"
+                        />
                       </ListItem>
                     ))}
                 </List>
@@ -303,22 +367,55 @@ const Dashboard = () => {
             />
             <CardContent sx={{ flexGrow: 1, overflow: 'auto' }}>
               {vendors.filter(v => v.favorite).length > 0 ? (
-                <List>
-                  {vendors.filter(v => v.favorite).slice(0, 5).map((vendor, index) => (
-                    <ListItem key={vendor.id} sx={{ px: 0, py: 1, borderBottom: index < vendors.filter(v => v.favorite).slice(0, 5).length - 1 ? '1px solid #eee' : 'none' }}>
-                      <ListItemText
-                        primary={
-                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                            {vendor.name}
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  {vendors.filter(v => v.favorite).slice(0, 5).map((vendor) => (
+                    <Box
+                      key={vendor.id}
+                      onClick={() => {
+                        setSelectedVendor(vendor);
+                        setVendorDetailModalOpen(true);
+                      }}
+                      sx={{
+                        p: 2,
+                        border: '1px solid #e0e0e0',
+                        borderRadius: 1,
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                        '&:hover': {
+                          borderColor: '#2196f3',
+                          boxShadow: '0 2px 8px rgba(33, 150, 243, 0.1)',
+                          transform: 'translateY(-2px)',
+                        },
+                        backgroundColor: '#fafafa',
+                      }}
+                    >
+                      <Typography variant="body2" sx={{ fontWeight: 600, mb: 1, color: '#333' }}>
+                        {vendor.name}
+                      </Typography>
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                        {vendor.phone && (
+                          <Typography variant="caption" sx={{ color: 'textSecondary' }}>
+                            📞 {vendor.phone}
                           </Typography>
-                        }
-                        secondary={vendor.phone || vendor.email}
-                      />
-                    </ListItem>
+                        )}
+                        {vendor.email && (
+                          <Typography variant="caption" sx={{ color: 'textSecondary' }}>
+                            ✉️ {vendor.email}
+                          </Typography>
+                        )}
+                        {!vendor.phone && !vendor.email && (
+                          <Typography variant="caption" sx={{ color: 'textSecondary', fontStyle: 'italic' }}>
+                            No contact info
+                          </Typography>
+                        )}
+                      </Box>
+                    </Box>
                   ))}
-                </List>
+                </Box>
               ) : (
-                <Typography color="textSecondary">No favorite vendors yet. Mark vendors as favorites in the Vendors page.</Typography>
+                <Typography color="textSecondary" sx={{ textAlign: 'center', py: 4 }}>
+                  No favorite vendors yet. Mark vendors as favorites in the Vendors page.
+                </Typography>
               )}
             </CardContent>
           </Card>
@@ -331,6 +428,194 @@ const Dashboard = () => {
         task={selectedTask}
         onClose={() => setSelectedTask(null)}
       />
+
+      {/* Vendor Detail Modal */}
+      <VendorDetailModal
+        open={vendorDetailModalOpen}
+        vendor={selectedVendor}
+        onClose={() => setVendorDetailModalOpen(false)}
+        onEdit={() => { setVendorDetailModalOpen(false); }}
+      />
+
+      {/* Stats Category Modal */}
+      <Dialog open={statsModalOpen} onClose={() => setStatsModalOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>
+          {selectedStatsCategory === 'openWorkOrders' && 'Open Work Orders'}
+          {selectedStatsCategory === 'upcomingMaintenance' && 'Upcoming Maintenance'}
+          {selectedStatsCategory === 'possibleRefund' && 'Possible VAT Refund'}
+        </DialogTitle>
+        <DialogContent sx={{ maxHeight: 600, overflow: 'auto' }}>
+          {selectedStatsCategory === 'openWorkOrders' && (
+            <List sx={{ pt: 2 }}>
+              {tasks.filter(t => t.status !== 'finished').map((task, index) => (
+                <ListItem
+                  key={task.id}
+                  onClick={() => {
+                    setSelectedTask(task);
+                    setStatsModalOpen(false);
+                  }}
+                  sx={{
+                    border: '1px solid #eee',
+                    borderRadius: 1,
+                    mb: 2,
+                    p: 2,
+                    cursor: 'pointer',
+                    '&:hover': { backgroundColor: '#f5f5f5', borderColor: '#2196f3' },
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'flex-start',
+                  }}
+                >
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%', mb: 1 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      {task.description}
+                    </Typography>
+                    <Chip
+                      label={task.status === 'pending' ? 'Pending' : 'In Progress'}
+                      size="small"
+                      color={task.status === 'pending' ? 'warning' : 'info'}
+                      variant="filled"
+                    />
+                  </Box>
+                  <Box sx={{ display: 'flex', gap: 3, width: '100%', mt: 1 }}>
+                    <Typography variant="caption" sx={{ color: 'textSecondary' }}>
+                      <strong>Property:</strong> {task.property_details?.name || 'N/A'}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: 'textSecondary' }}>
+                      <strong>Vendor:</strong> {task.vendor_details?.name || '-'}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: 'textSecondary' }}>
+                      <strong>Cost:</strong> {task.cost ? `$${task.cost.toFixed(2)}` : '-'}
+                    </Typography>
+                  </Box>
+                </ListItem>
+              ))}
+            </List>
+          )}
+
+          {selectedStatsCategory === 'upcomingMaintenance' && (
+            <List sx={{ pt: 2 }}>
+              {tasks.filter(t => t.status !== 'finished').map((task, index) => (
+                <ListItem
+                  key={task.id}
+                  onClick={() => {
+                    setSelectedTask(task);
+                    setStatsModalOpen(false);
+                  }}
+                  sx={{
+                    border: '1px solid #eee',
+                    borderRadius: 1,
+                    mb: 2,
+                    p: 2,
+                    cursor: 'pointer',
+                    '&:hover': { backgroundColor: '#f5f5f5', borderColor: '#4caf50' },
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'flex-start',
+                  }}
+                >
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%', mb: 1 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      {task.description}
+                    </Typography>
+                    <Chip
+                      label={task.status === 'pending' ? 'Pending' : 'In Progress'}
+                      size="small"
+                      color={task.status === 'pending' ? 'warning' : 'info'}
+                      variant="filled"
+                    />
+                  </Box>
+                  <Box sx={{ display: 'flex', gap: 3, width: '100%', mt: 1 }}>
+                    <Typography variant="caption" sx={{ color: 'textSecondary' }}>
+                      <strong>Property:</strong> {task.property_details?.name || 'N/A'}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: 'textSecondary' }}>
+                      <strong>Vendor:</strong> {task.vendor_details?.name || '-'}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: 'textSecondary' }}>
+                      <strong>Cost:</strong> {task.cost ? `$${task.cost.toFixed(2)}` : '-'}
+                    </Typography>
+                  </Box>
+                </ListItem>
+              ))}
+            </List>
+          )}
+
+          {selectedStatsCategory === 'possibleRefund' && (
+            <List sx={{ pt: 2 }}>
+              {tasks.filter(t => {
+                const hasVatRefundable = t.price_breakdown && t.price_breakdown.some(item => item.vat_refundable);
+                const hasFinalWorkPrice = t.final_work_price;
+                return t.status === 'finished' && !t.vat_refund_claimed && (hasVatRefundable || hasFinalWorkPrice);
+              }).length > 0 ? (
+                tasks.filter(t => {
+                  const hasVatRefundable = t.price_breakdown && t.price_breakdown.some(item => item.vat_refundable);
+                  const hasFinalWorkPrice = t.final_work_price;
+                  return t.status === 'finished' && !t.vat_refund_claimed && (hasVatRefundable || hasFinalWorkPrice);
+                }).map((task) => {
+                  let vatRefundableAmount = 0;
+                  if (task.price_breakdown && task.price_breakdown.length > 0) {
+                    vatRefundableAmount = task.price_breakdown
+                      .filter(item => item.vat_refundable)
+                      .reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+                  } else {
+                    vatRefundableAmount = parseFloat(task.final_work_price) || 0;
+                  }
+                  const refundAmount = Math.floor(vatRefundableAmount * 0.35);
+                  
+                  return (
+                    <ListItem
+                      key={task.id}
+                      onClick={() => {
+                        setSelectedTask(task);
+                        setStatsModalOpen(false);
+                      }}
+                      sx={{
+                        border: '1px solid #eee',
+                        borderRadius: 1,
+                        mb: 2,
+                        p: 2,
+                        cursor: 'pointer',
+                        '&:hover': { backgroundColor: '#f5f5f5', borderColor: '#4caf50' },
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'flex-start',
+                      }}
+                    >
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%', mb: 1 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                          {task.description}
+                        </Typography>
+                        <Chip
+                          label="Finished"
+                          size="small"
+                          color="success"
+                          variant="filled"
+                        />
+                      </Box>
+                      <Box sx={{ display: 'flex', gap: 3, width: '100%', mt: 1 }}>
+                        <Typography variant="caption" sx={{ color: 'textSecondary' }}>
+                          <strong>VAT Refundable:</strong> {vatRefundableAmount.toFixed(0)} Kr.
+                        </Typography>
+                        <Typography variant="caption" sx={{ fontWeight: 600, color: '#4caf50' }}>
+                          <strong>Refund (35%):</strong> {refundAmount.toLocaleString('is-IS')} Kr.
+                        </Typography>
+                      </Box>
+                    </ListItem>
+                  );
+                })
+              ) : (
+                <Typography color="textSecondary" sx={{ textAlign: 'center', py: 4 }}>
+                  No finished tasks with VAT refundable costs available for refund claim.
+                </Typography>
+              )}
+            </List>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setStatsModalOpen(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
