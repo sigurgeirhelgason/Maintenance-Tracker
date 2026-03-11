@@ -30,14 +30,29 @@ import {
   TableHead,
   TableRow,
   InputAdornment,
+  IconButton,
 } from '@mui/material';
-import { Add as AddIcon, Download as DownloadIcon, Search as SearchIcon, ArrowUpward as ArrowUpIcon, ArrowDownward as ArrowDownIcon } from '@mui/icons-material';
+import { Add as AddIcon, Download as DownloadIcon, Search as SearchIcon, ArrowUpward as ArrowUpIcon, ArrowDownward as ArrowDownIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import PageHeader from './Layout/PageHeader';
 import DetailPanel from './shared/DetailPanel';
 import DetailField from './shared/DetailField';
 import ConfirmDialog from './shared/ConfirmDialog';
 import NotificationSnackbar from './shared/NotificationSnackbar';
 import { useNotification, useConfirmDialog } from './shared/hooks';
+
+// Format number with dot thousand separators (e.g., 200000 -> "200.000")
+const formatDotThousands = (num) => {
+  if (num === '' || num === null || num === undefined) return '';
+  const numStr = String(num).replace(/\D/g, ''); // Remove non-digits
+  if (!numStr) return '';
+  return numStr.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+};
+
+// Parse dot thousand separator format back to number (e.g., "200.000" -> 200000)
+const parseDotThousands = (str) => {
+  if (!str) return '';
+  return str.replace(/\./g, '');
+};
 
 const Tasks = () => {
   const [properties, setProperties] = useState([]);
@@ -72,6 +87,8 @@ const Tasks = () => {
     due_date: '',
     estimated_price: '',
     final_price: '',
+    vat_refund_claimed: false,
+    price_breakdown: [],
     areas: [],
     notes: '',
     custom_field_values: {},
@@ -239,6 +256,8 @@ const Tasks = () => {
         ...task,
         estimated_price: task.estimated_price || '',
         final_price: task.final_price || '',
+        vat_refund_claimed: task.vat_refund_claimed || false,
+        price_breakdown: task.price_breakdown || [],
         custom_field_values: task.custom_field_values || {},
       });
     } else {
@@ -252,6 +271,8 @@ const Tasks = () => {
         due_date: '',
         estimated_price: '',
         final_price: '',
+        vat_refund_claimed: false,
+        price_breakdown: [],
         areas: [],
         notes: '',
         custom_field_values: {},
@@ -268,10 +289,75 @@ const Tasks = () => {
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value,
-    }));
+    
+    if (name === 'estimated_price' || name === 'final_price') {
+      // Format price input with dot thousand separators
+      const numericValue = parseDotThousands(value);
+      const formattedValue = formatDotThousands(numericValue);
+      
+      if (name === 'final_price') {
+        // When final_price changes, update price_breakdown in real-time
+        const finalPrice = parseInt(numericValue) || 0;
+        
+        setFormData(prev => {
+          const updated = { ...prev, [name]: formattedValue };
+          
+          if (finalPrice > 0) {
+            // Calculate sum of all non-"uncategorized" items
+            let sumNonOther = 0;
+            let otherIndex = -1;
+            
+            const newBreakdown = [...(prev.price_breakdown || [])];
+            newBreakdown.forEach((item, index) => {
+              if (item.category === 'uncategorized') {
+                otherIndex = index;
+              } else {
+                sumNonOther += parseInt(item.amount) || 0;
+              }
+            });
+            
+            // Calculate what "uncategorized" should be
+            const otherAmount = finalPrice - sumNonOther;
+            
+            if (otherAmount > 0) {
+              // Update or create "uncategorized" item
+              if (otherIndex >= 0) {
+                newBreakdown[otherIndex].amount = otherAmount;
+              } else {
+                newBreakdown.push({
+                  category: 'uncategorized',
+                  amount: otherAmount,
+                  vat_refundable: false,
+                  description: ''
+                });
+              }
+            } else {
+              // Remove "uncategorized" if amount is 0 or less
+              if (otherIndex >= 0) {
+                newBreakdown.splice(otherIndex, 1);
+              }
+            }
+            
+            updated.price_breakdown = newBreakdown;
+          } else {
+            // Clear breakdown if final_price is 0
+            updated.price_breakdown = [];
+          }
+          
+          return updated;
+        });
+      } else {
+        setFormData(prev => ({
+          ...prev,
+          [name]: formattedValue,
+        }));
+      }
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [name]: type === 'checkbox' ? checked : value,
+      }));
+    }
   };
 
   const handleAreaToggle = (areaId) => {
@@ -283,6 +369,90 @@ const Tasks = () => {
         return { ...prev, areas: [...areas, areaId] };
       }
     });
+  };
+
+  const addPriceBreakdownItem = () => {
+    setFormData(prev => ({
+      ...prev,
+      price_breakdown: [...(prev.price_breakdown || []), { category: 'materials', amount: '', vat_refundable: false, description: '' }]
+    }));
+  };
+
+  const removePriceBreakdownItem = (index) => {
+    setFormData(prev => ({
+      ...prev,
+      price_breakdown: prev.price_breakdown.filter((_, i) => i !== index)
+    }));
+  };
+
+  const updatePriceBreakdownItem = (index, field, value) => {
+    setFormData(prev => {
+      const updated = [...prev.price_breakdown];
+      // Auto-set vat_refundable based on category when category changes
+      if (field === 'category') {
+        updated[index] = { ...updated[index], [field]: value, vat_refundable: value === 'work' };
+      } else if (field === 'amount') {
+        // Format and parse price amounts
+        const numericValue = parseDotThousands(value);
+        updated[index] = { ...updated[index], [field]: numericValue ? parseInt(numericValue) : '' };
+      } else {
+        updated[index] = { ...updated[index], [field]: value };
+      }
+      
+      // If amount field was changed and final_price is set, recalculate "uncategorized"
+      if (field === 'amount' && prev.final_price) {
+        const finalPrice = parseInt(parseDotThousands(prev.final_price)) || 0;
+        
+        // Calculate sum of all non-"uncategorized" items
+        let sumNonOther = 0;
+        let otherIndex = -1;
+        
+        updated.forEach((item, idx) => {
+          if (item.category === 'uncategorized') {
+            otherIndex = idx;
+          } else {
+            sumNonOther += parseInt(item.amount) || 0;
+          }
+        });
+        
+        // Calculate what "uncategorized" should be
+        const otherAmount = finalPrice - sumNonOther;
+        
+        if (otherAmount > 0) {
+          // Update or create "uncategorized" item
+          if (otherIndex >= 0) {
+            updated[otherIndex].amount = otherAmount;
+          } else {
+            updated.push({
+              category: 'uncategorized',
+              amount: otherAmount,
+              vat_refundable: false,
+              description: ''
+            });
+          }
+        } else {
+          // Remove "uncategorized" if amount is 0 or less
+          if (otherIndex >= 0) {
+            updated.splice(otherIndex, 1);
+          }
+        }
+      }
+      
+      return { ...prev, price_breakdown: updated };
+    });
+  };
+
+  const calculatePriceBreakdownTotals = () => {
+    let total = 0;
+    let vatRefundable = 0;
+    (formData.price_breakdown || []).forEach(item => {
+      const amount = parseInt(item.amount) || 0;
+      total += amount;
+      if (item.vat_refundable) {
+        vatRefundable += amount;
+      }
+    });
+    return { total, vatRefundable };
   };
 
   const handleSave = async () => {
@@ -298,8 +468,9 @@ const Tasks = () => {
         task_type: formData.task_type?.id || formData.task_type || null,
         vendor: formData.vendor?.id || formData.vendor || null,
         due_date: formData.due_date || null,
-        estimated_price: formData.estimated_price ? parseFloat(formData.estimated_price) : null,
-        final_price: formData.final_price ? parseFloat(formData.final_price) : null,
+        estimated_price: formData.estimated_price ? parseInt(parseDotThousands(formData.estimated_price)) : null,
+        final_price: formData.final_price ? parseInt(parseDotThousands(formData.final_price)) : null,
+        vat_refund_claimed: formData.vat_refund_claimed,
       };
 
       let taskId;
@@ -441,31 +612,46 @@ const Tasks = () => {
         </Card>
       ) : (
         <Box>
-          {/* Property Selector */}
-          <Box sx={{ mb: 3, display: 'flex', gap: 2 }}>
-            <FormControl sx={{ minWidth: 250 }}>
-              <InputLabel>Properties</InputLabel>
-              <Select
-                value={selectedProperty || ''}
-                onChange={handlePropertyChange}
-                label="Properties"
+          {/* Property Selector - Only show if more than one property */}
+          {properties.length > 1 && (
+            <Box sx={{ mb: 3, display: 'flex', gap: 2 }}>
+              <FormControl sx={{ minWidth: 250 }}>
+                <InputLabel>Properties</InputLabel>
+                <Select
+                  value={selectedProperty || ''}
+                  onChange={handlePropertyChange}
+                  label="Properties"
+                >
+                  {properties.map(prop => (
+                    <MenuItem key={prop.id} value={prop.id}>
+                      {prop.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={() => handleOpen()}
+                sx={{ mt: 1 }}
               >
-                {properties.map(prop => (
-                  <MenuItem key={prop.id} value={prop.id}>
-                    {prop.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={() => handleOpen()}
-              sx={{ mt: 1 }}
-            >
-              New Task
-            </Button>
-          </Box>
+                New Task
+              </Button>
+            </Box>
+          )}
+
+          {/* Add New Task Button - Show alone if only one property */}
+          {properties.length === 1 && (
+            <Box sx={{ mb: 3 }}>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={() => handleOpen()}
+              >
+                New Task
+              </Button>
+            </Box>
+          )}
 
           {/* Task Statistics Cards */}
           <Grid container spacing={2} sx={{ mb: 4 }}>
@@ -710,6 +896,14 @@ const Tasks = () => {
                         >
                           {formatDate(task.due_date)}
                         </TableCell>
+                        <TableCell sx={{ fontSize: '0.9rem', textAlign: 'right', fontWeight: 500 }}>
+                          {task.final_price
+                            ? parseFloat(task.final_price).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ' Kr.'
+                            : task.estimated_price
+                            ? parseFloat(task.estimated_price).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ' Kr.'
+                            : '-'
+                          }
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -770,8 +964,36 @@ const Tasks = () => {
                   {selectedTask.final_price && (
                     <DetailField label="ACTUAL COST">
                       <Typography variant="body2" sx={{ fontWeight: 600, color: '#F44336' }}>
-                        {selectedTask.currency} {selectedTask.final_price}
+                        {parseFloat(selectedTask.final_price).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.')} Kr.
                       </Typography>
+                    </DetailField>
+                  )}
+                  {selectedTask.price_breakdown && selectedTask.price_breakdown.length > 0 && (
+                    <DetailField label="COST BREAKDOWN">
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                        {selectedTask.price_breakdown.map((item, index) => (
+                          <Box key={index} sx={{ display: 'grid', gridTemplateColumns: '0.8fr 0.6fr', gap: 1, p: 1, bgcolor: '#f5f5f5', borderRadius: 0.5, fontSize: '0.85rem' }}>
+                            <Box>
+                              <Typography variant="caption" sx={{ fontWeight: 600, textTransform: 'capitalize' }}>
+                                {item.category}
+                              </Typography>
+                            </Box>
+                            <Box sx={{ textAlign: 'right' }}>
+                              <Typography variant="caption">
+                                {formatDotThousands(item.amount)} Kr. {item.vat_refundable && '(VAT)'}
+                              </Typography>
+                            </Box>
+                          </Box>
+                        ))}
+                        {selectedTask.price_breakdown.length > 0 && (
+                          <Box sx={{ display: 'grid', gridTemplateColumns: '0.8fr 0.6fr', gap: 1, p: 1, borderTop: '1px solid #ccc', fontWeight: 600, fontSize: '0.9rem' }}>
+                            <Box>Total</Box>
+                            <Box sx={{ textAlign: 'right' }}>
+                              {formatDotThousands(selectedTask.price_breakdown.reduce((sum, item) => sum + (parseInt(item.amount) || 0), 0))} Kr.
+                            </Box>
+                          </Box>
+                        )}
+                      </Box>
                     </DetailField>
                   )}
                   {selectedTask.notes && (
@@ -779,19 +1001,51 @@ const Tasks = () => {
                   )}
                   {selectedTask.attachments && selectedTask.attachments.length > 0 && (
                     <DetailField label="ATTACHMENTS">
-                      {selectedTask.attachments.map(attachment => (
-                        <Button
-                          key={attachment.id}
-                          size="small"
-                          startIcon={<DownloadIcon />}
-                          href={attachment.file}
-                          download
-                          fullWidth
-                          sx={{ justifyContent: 'flex-start', mb: 1 }}
-                        >
-                          {attachment.filename ? attachment.filename() : 'Download'}
-                        </Button>
-                      ))}
+                      {selectedTask.attachments.map(attachment => {
+                        const fileName = attachment.file ? attachment.file.split('/').pop() : 'File';
+                        return (
+                          <Box
+                            key={attachment.id}
+                            sx={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              p: 1.5,
+                              mb: 1,
+                              border: '1px solid #e0e0e0',
+                              borderRadius: 1,
+                              backgroundColor: '#fafafa',
+                              '&:hover': {
+                                backgroundColor: '#f0f0f0',
+                                borderColor: '#2196f3',
+                              },
+                              gap: 1,
+                            }}
+                          >
+                            <Typography
+                              variant="body2"
+                              sx={{
+                                fontWeight: 500,
+                                flex: 1,
+                                ml: 1,
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {fileName}
+                            </Typography>
+                            <Button
+                              size="small"
+                              href={attachment.file}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              startIcon={<DownloadIcon />}
+                              sx={{ whiteSpace: 'nowrap', minWidth: 'auto', p: 0.5, flexShrink: 0 }}
+                            />
+                          </Box>
+                        );
+                      })}
                     </DetailField>
                   )}
                 </DetailPanel>
@@ -965,23 +1219,121 @@ const Tasks = () => {
               margin="dense"
               label="Estimated Price"
               name="estimated_price"
-              type="number"
+              type="text"
               value={formData.estimated_price}
               onChange={handleChange}
               variant="outlined"
-              inputProps={{ step: '0.01', min: '0' }}
-            />
-            <TextField
-              margin="dense"
-              label="Final Price"
-              name="final_price"
-              type="number"
-              value={formData.final_price}
-              onChange={handleChange}
-              variant="outlined"
-              inputProps={{ step: '0.01', min: '0' }}
+              inputProps={{ min: '0' }}
+              placeholder="0"
             />
           </Box>
+
+          {formData.status === 'finished' && (
+            <>
+              <TextField
+                margin="dense"
+                label="Final Price"
+                name="final_price"
+                type="text"
+                value={formData.final_price}
+                onChange={handleChange}
+                variant="outlined"
+                inputProps={{ min: '0' }}
+                fullWidth
+                sx={{ mb: 2 }}
+                placeholder="0"
+              />
+
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    name="vat_refund_claimed"
+                    checked={formData.vat_refund_claimed}
+                    onChange={handleChange}
+                  />
+                }
+                label="VAT Refund Claimed"
+                sx={{ mb: 2 }}
+              />
+
+              {/* Price Breakdown Section */}
+              <Box sx={{ mb: 2, p: 2, bgcolor: '#f5f5f5', borderRadius: 1 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>Cost Breakdown</Typography>
+                  <Button size="small" variant="outlined" onClick={addPriceBreakdownItem}>
+                    + Add Item
+                  </Button>
+                </Box>
+
+                {formData.price_breakdown && formData.price_breakdown.length > 0 ? (
+                  <>
+                    {formData.price_breakdown.map((item, index) => (
+                      <Box key={index} sx={{ display: 'grid', gridTemplateColumns: '1fr 0.8fr auto auto', gap: 1, mb: 2, alignItems: 'flex-start' }}>
+                        <FormControl size="small">
+                          <InputLabel>Category</InputLabel>
+                          <Select
+                            value={item.category || 'materials'}
+                            label="Category"
+                            onChange={(e) => updatePriceBreakdownItem(index, 'category', e.target.value)}
+                          >
+                            <MenuItem value="materials">Materials</MenuItem>
+                            <MenuItem value="work">Work/Labor</MenuItem>
+                            <MenuItem value="travel">Travel</MenuItem>
+                            <MenuItem value="tools">Tools</MenuItem>
+                            <MenuItem value="uncategorized">Uncategorized</MenuItem>
+                          </Select>
+                        </FormControl>
+
+                        <TextField
+                          size="small"
+                          label="Amount"
+                          type="text"
+                          value={formatDotThousands(item.amount || '')}
+                          onChange={(e) => updatePriceBreakdownItem(index, 'amount', e.target.value)}
+                          inputProps={{ min: '0' }}
+                          variant="outlined"
+                          placeholder="0"
+                        />
+
+                        <IconButton size="small" color="error" onClick={() => removePriceBreakdownItem(index)}>
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Box>
+                    ))}
+
+                    {/* Description field for last item */}
+                    {formData.price_breakdown.length > 0 && (
+                      <TextField
+                        size="small"
+                        label="Description (for breakdown)"
+                        fullWidth
+                        placeholder="Optional: describe the items (e.g., Paint and supplies for materials)"
+                        value={formData.price_breakdown[formData.price_breakdown.length - 1].description || ''}
+                        onChange={(e) => updatePriceBreakdownItem(formData.price_breakdown.length - 1, 'description', e.target.value)}
+                        variant="outlined"
+                        sx={{ mb: 2 }}
+                      />
+                    )}
+
+                    {/* Cost Totals */}
+                    {(() => {
+                      const { total, vatRefundable } = calculatePriceBreakdownTotals();
+                      return (
+                        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, pt: 1, borderTop: '1px solid #ccc' }}>
+                          <Typography variant="body2"><strong>Total:</strong> {formatDotThousands(total)} Kr.</Typography>
+                          <Typography variant="body2"><strong>VAT Refundable (35%):</strong> {formatDotThousands(Math.round(vatRefundable * 0.35))} Kr.</Typography>
+                        </Box>
+                      );
+                    })()}
+                  </>
+                ) : (
+                  <Typography variant="body2" color="textSecondary" sx={{ fontStyle: 'italic' }}>
+                    No cost items added yet
+                  </Typography>
+                )}
+              </Box>
+            </>
+          )}
 
           <TextField
             margin="dense"
