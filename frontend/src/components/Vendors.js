@@ -35,15 +35,15 @@ import {
   MenuItem,
   OutlinedInput,
 } from '@mui/material';
-import { Edit as EditIcon, Delete as DeleteIcon, Add as AddIcon, Phone as PhoneIcon, Email as EmailIcon, Star as StarIcon, StarBorder as StarBorderIcon, Search as SearchIcon, ArrowUpward as ArrowUpIcon, ArrowDownward as ArrowDownIcon, Favorite as FavoriteIcon, FavoriteBorder as FavoriteBorderIcon } from '@mui/icons-material';
+import { Edit as EditIcon, Delete as DeleteIcon, Add as AddIcon, Phone as PhoneIcon, Email as EmailIcon, Star as StarIcon, StarBorder as StarBorderIcon, Search as SearchIcon, ArrowUpward as ArrowUpIcon, ArrowDownward as ArrowDownIcon, Favorite as FavoriteIcon, FavoriteBorder as FavoriteBorderIcon, Visibility as VisibilityIcon } from '@mui/icons-material';
 import PageHeader from './Layout/PageHeader';
-import DetailPanel from './shared/DetailPanel';
-import DetailField from './shared/DetailField';
+import VendorDetailModal from './VendorDetailModal';
 
 const Vendors = () => {
   const [vendors, setVendors] = useState([]);
   const [taskTypes, setTaskTypes] = useState([]);
   const [selectedVendor, setSelectedVendor] = useState(null);
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -139,6 +139,15 @@ const Vendors = () => {
     setEditing(null);
   };
 
+  const handleDetailModalOpen = (vendor) => {
+    setSelectedVendor(vendor);
+    setDetailModalOpen(true);
+  };
+
+  const handleDetailModalClose = () => {
+    setDetailModalOpen(false);
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -146,15 +155,22 @@ const Vendors = () => {
 
   const handleSave = async () => {
     try {
+      const submitData = {
+        ...formData,
+        secondary_task_types: formData.secondary_task_types.filter(id => id !== null && id !== undefined),
+      };
+
       if (editing) {
-        await axios.put(`/api/vendors/${editing.id}/`, formData);
+        await axios.put(`/api/vendors/${editing.id}/`, submitData);
       } else {
-        await axios.post('/api/vendors/', formData);
+        await axios.post('/api/vendors/', submitData);
       }
       fetch();
       handleClose();
+      showNotification(editing ? 'Vendor updated successfully' : 'Vendor created successfully', 'success');
     } catch (err) {
       console.error('Error saving:', err);
+      showNotification('Error saving vendor', 'error');
     }
   };
 
@@ -275,11 +291,28 @@ const Vendors = () => {
               <Grid container spacing={2}>
                 {favoriteVendors.map(vendor => (
                   <Grid item xs={12} sm={6} md={4} lg={3} key={vendor.id}>
-                    <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column', position: 'relative' }}>
+                    <Card 
+                      onClick={() => handleDetailModalOpen(vendor)}
+                      sx={{ 
+                        height: '100%', 
+                        display: 'flex', 
+                        flexDirection: 'column', 
+                        position: 'relative',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                        '&:hover': {
+                          boxShadow: 3,
+                          transform: 'translateY(-4px)',
+                        },
+                      }}
+                    >
                       <Box sx={{ position: 'absolute', top: 8, right: 8, zIndex: 10 }}>
                         <IconButton
                           size="small"
-                          onClick={() => toggleFavorite(vendor)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleFavorite(vendor);
+                          }}
                           sx={{ color: '#ffc107' }}
                         >
                           <StarIcon sx={{ fontSize: 20 }} />
@@ -312,14 +345,6 @@ const Vendors = () => {
                           )}
                         </Box>
                       </CardContent>
-                      <CardActions sx={{ pt: 0 }}>
-                        <Button size="small" startIcon={<EditIcon />} onClick={() => handleOpen(vendor)}>
-                          Edit
-                        </Button>
-                        <Button size="small" color="error" startIcon={<DeleteIcon />} onClick={() => handleDelete(vendor.id)}>
-                          Delete
-                        </Button>
-                      </CardActions>
                     </Card>
                   </Grid>
                 ))}
@@ -397,7 +422,7 @@ const Vendors = () => {
               </Button>
             </Box>
 
-            {/* Vendors Table and Detail Panel */}
+            {/* Vendors Table */}
             <Box sx={{ display: 'flex', gap: 2 }}>
               <TableContainer component={Paper} sx={{ flex: 1 }}>
                 <Table size="small">
@@ -405,11 +430,10 @@ const Vendors = () => {
                     <TableRow>
                       <TableCell sx={{ fontWeight: 700, minWidth: 40 }}>Favorite</TableCell>
                       <TableCell sx={{ fontWeight: 700, minWidth: 200 }}>Vendor Name</TableCell>
-                      <TableCell sx={{ fontWeight: 700, minWidth: 150 }}>Task Types</TableCell>
+                      <TableCell sx={{ fontWeight: 700, minWidth: 150 }}>Task Type</TableCell>
                       <TableCell sx={{ fontWeight: 700, minWidth: 120 }}>Contact Person</TableCell>
                       <TableCell sx={{ fontWeight: 700, minWidth: 120 }}>Phone</TableCell>
                       <TableCell sx={{ fontWeight: 700, minWidth: 150 }}>Email</TableCell>
-                      <TableCell sx={{ fontWeight: 700, minWidth: 100 }}>Actions</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -417,10 +441,9 @@ const Vendors = () => {
                       filteredAndSortedVendors.map(vendor => (
                         <TableRow
                           key={vendor.id}
-                          onClick={() => setSelectedVendor(vendor)}
+                          onClick={() => handleDetailModalOpen(vendor)}
                           sx={{
                             cursor: 'pointer',
-                            bgcolor: selectedVendor?.id === vendor.id ? '#E3F2FD' : 'transparent',
                             '&:hover': {
                               bgcolor: '#F5F5F5',
                             },
@@ -439,17 +462,11 @@ const Vendors = () => {
                             {vendor.name}
                           </TableCell>
                           <TableCell sx={{ fontSize: '0.9rem' }}>
-                            <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                              {vendor.task_type_details && (
-                                <Chip label={`Main: ${vendor.task_type_details.name}`} size="small" color="primary" variant="outlined" />
-                              )}
-                              {vendor.secondary_task_types_details && vendor.secondary_task_types_details.length > 0 && (
-                                vendor.secondary_task_types_details.map(type => (
-                                  <Chip key={type.id} label={type.name} size="small" />
-                                ))
-                              )}
-                              {!vendor.task_type_details && (!vendor.secondary_task_types_details || vendor.secondary_task_types_details.length === 0) && '-'}
-                            </Box>
+                            {vendor.task_type_details ? (
+                              <Chip label={vendor.task_type_details.name} size="small" color="primary" variant="outlined" />
+                            ) : (
+                              '-'
+                            )}
                           </TableCell>
                           <TableCell sx={{ fontSize: '0.9rem' }}>
                             {vendor.contact_person || '-'}
@@ -460,29 +477,11 @@ const Vendors = () => {
                           <TableCell sx={{ fontSize: '0.9rem' }}>
                             {vendor.email || '-'}
                           </TableCell>
-                          <TableCell sx={{ fontSize: '0.9rem' }}>
-                            <Button
-                              size="small"
-                              startIcon={<EditIcon />}
-                              onClick={(e) => { e.stopPropagation(); handleOpen(vendor); }}
-                              sx={{ mr: 1 }}
-                            >
-                              Edit
-                            </Button>
-                            <Button
-                              size="small"
-                              color="error"
-                              startIcon={<DeleteIcon />}
-                              onClick={(e) => { e.stopPropagation(); handleDelete(vendor.id); }}
-                            >
-                              Delete
-                            </Button>
-                          </TableCell>
                         </TableRow>
                       ))
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={8} sx={{ textAlign: 'center', py: 3 }}>
+                        <TableCell colSpan={6} sx={{ textAlign: 'center', py: 3 }}>
                           <Typography color="textSecondary">
                             {searchTerm || taskTypeFilter ? 'No vendors match your filters' : 'No vendors to display'}
                           </Typography>
@@ -492,51 +491,6 @@ const Vendors = () => {
                   </TableBody>
                 </Table>
               </TableContainer>
-
-              {/* Vendor Detail Panel */}
-              {selectedVendor && (
-                <DetailPanel
-                  title="Vendor Details"
-                  onClose={() => setSelectedVendor(null)}
-                  onEdit={() => handleOpen(selectedVendor)}
-                  onDelete={() => { handleDelete(selectedVendor.id); setSelectedVendor(null); }}
-                >
-                  <DetailField label="VENDOR NAME" value={selectedVendor.name} />
-                  {selectedVendor.task_type_details && (
-                    <DetailField label="MAIN TASK TYPE" value={selectedVendor.task_type_details.name} />
-                  )}
-                  {selectedVendor.secondary_task_types_details && selectedVendor.secondary_task_types_details.length > 0 && (
-                    <DetailField label="SECONDARY TASK TYPES">
-                      <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                        {selectedVendor.secondary_task_types_details.map(type => (
-                          <Chip key={type.id} label={type.name} size="small" />
-                        ))}
-                      </Box>
-                    </DetailField>
-                  )}
-                  {selectedVendor.contact_person && (
-                    <DetailField label="CONTACT PERSON" value={selectedVendor.contact_person} />
-                  )}
-                  {selectedVendor.phone && (
-                    <DetailField label="PHONE" value={selectedVendor.phone} />
-                  )}
-                  {selectedVendor.email && (
-                    <DetailField label="EMAIL" value={selectedVendor.email} />
-                  )}
-                  {selectedVendor.address && (
-                    <DetailField label="ADDRESS" value={selectedVendor.address} />
-                  )}
-                  <DetailField label="FAVORITE">
-                    <IconButton
-                      size="small"
-                      onClick={() => { toggleFavorite(selectedVendor); }}
-                      sx={{ color: selectedVendor.favorite ? '#ffc107' : '#bdbdbd' }}
-                    >
-                      {selectedVendor.favorite ? <StarIcon /> : <StarBorderIcon />}
-                    </IconButton>
-                  </DetailField>
-                </DetailPanel>
-              )}
             </Box>
           </Box>
         </Box>
@@ -613,11 +567,29 @@ const Vendors = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={handleClose}>Cancel</Button>
+          {editing && (
+            <Button 
+              onClick={() => { handleDelete(editing.id); handleClose(); }} 
+              variant="contained" 
+              color="error"
+              startIcon={<DeleteIcon />}
+            >
+              Delete
+            </Button>
+          )}
           <Button onClick={handleSave} variant="contained">
             {editing ? 'Update' : 'Create'}
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Vendor Detail Modal */}
+      <VendorDetailModal
+        open={detailModalOpen}
+        vendor={selectedVendor}
+        onClose={handleDetailModalClose}
+        onEdit={() => { handleDetailModalClose(); handleOpen(selectedVendor); }}
+      />
 
       {/* Notification Snackbar */}
       <Snackbar
