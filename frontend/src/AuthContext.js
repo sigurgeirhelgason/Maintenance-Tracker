@@ -11,12 +11,17 @@ export const AuthProvider = ({ children }) => {
   // Check if user is logged in on mount
   useEffect(() => {
     const token = localStorage.getItem('access_token');
-    if (token) {
-      // Set axios default header
+    const refreshToken = localStorage.getItem('refresh_token');
+    
+    // If we have both tokens, assume user is logged in and proceed
+    // The axios interceptor will handle token refresh or logout if needed
+    if (token && refreshToken) {
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      // Verify token by getting current user
-      fetchCurrentUser();
+      // Don't verify the token here - let components make normal API calls
+      // When they do, the axios interceptor will handle any 401 errors
+      setLoading(false);
     } else {
+      // No tokens stored, user is not authenticated
       setLoading(false);
     }
   }, []);
@@ -27,11 +32,12 @@ export const AuthProvider = ({ children }) => {
       setUser(response.data);
       setError(null);
     } catch (err) {
-      // Token is invalid, clear it
+      // Token is invalid, clear it silently
       localStorage.removeItem('access_token');
       localStorage.removeItem('refresh_token');
+      delete axios.defaults.headers.common['Authorization'];
       setUser(null);
-      setError('Session expired');
+      setError(null);
     } finally {
       setLoading(false);
     }
@@ -103,7 +109,7 @@ export const AuthProvider = ({ children }) => {
     register,
     login,
     logout,
-    isAuthenticated: !!user,
+    isAuthenticated: !!(localStorage.getItem('access_token') && localStorage.getItem('refresh_token')),
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
