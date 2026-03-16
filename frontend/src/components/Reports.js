@@ -69,6 +69,8 @@ const Reports = () => {
   const [yearFilter, setYearFilter] = useState('all');
   const [monthModalOpen, setMonthModalOpen] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(null);
+  const [areaModalOpen, setAreaModalOpen] = useState(false);
+  const [selectedArea, setSelectedArea] = useState(null);
 
   // Map reportType to tab index
   useEffect(() => {
@@ -330,6 +332,47 @@ const Reports = () => {
     }
   }, [tasks, yearFilter]);
 
+  // Get tasks for selected area
+  const areaTasksForModal = useMemo(() => {
+    if (!selectedArea) return [];
+    
+    return tasks
+      .filter(task => {
+        const taskAreas = task.areas || [];
+        return taskAreas.includes(selectedArea.areaId);
+      })
+      .map(task => ({
+        ...task,
+        property_name: properties.find(p => p.id === task.property)?.name || `Property ${task.property}`,
+        vendor_name: vendors.find(v => v.id === task.vendor)?.name || '-',
+      }))
+      .sort((a, b) => new Date(b.due_date) - new Date(a.due_date));
+  }, [tasks, properties, vendors, selectedArea]);
+
+  // Group area tasks by status
+  const areaTasksByStatus = useMemo(() => {
+    const statusOrder = ['pending', 'in_progress', 'finished'];
+    const grouped = {
+      pending: [],
+      in_progress: [],
+      finished: []
+    };
+    
+    areaTasksForModal.forEach(task => {
+      if (grouped[task.status]) {
+        grouped[task.status].push(task);
+      }
+    });
+    
+    return statusOrder
+      .filter(status => grouped[status].length > 0)
+      .map(status => ({
+        status,
+        tasks: grouped[status],
+        total: grouped[status].reduce((sum, t) => sum + (t.final_price || 0), 0)
+      }));
+  }, [areaTasksForModal]);
+
   // Get tasks for selected month (only finished tasks)
   const monthTasks = useMemo(() => {
     if (!selectedMonth) return [];
@@ -371,7 +414,7 @@ const Reports = () => {
         
         const areaLabel = area.name || area.type;
         if (!data[areaLabel]) {
-          data[areaLabel] = { open: 0, finished: 0, type: area.type };
+          data[areaLabel] = { open: 0, finished: 0, type: area.type, areaId: areaId };
         }
         if (task.status === 'finished') {
           data[areaLabel].finished += 1;
@@ -1500,7 +1543,14 @@ const Reports = () => {
                     </TableHead>
                     <TableBody>
                       {areaMaintenanceData.map((area, idx) => (
-                        <TableRow key={idx}>
+                        <TableRow 
+                          key={idx}
+                          onClick={() => {
+                            setSelectedArea({ areaId: area.areaId, areaName: area.area });
+                            setAreaModalOpen(true);
+                          }}
+                          sx={{ cursor: 'pointer', '&:hover': { backgroundColor: '#f5f5f5' } }}
+                        >
                           <TableCell>{area.area}</TableCell>
                           <TableCell>{area.type}</TableCell>
                           <TableCell align="right" sx={{ color: area.open > 0 ? '#FF9800' : '#666' }}>
@@ -1969,6 +2019,89 @@ const Reports = () => {
           </DialogContent>
           <DialogActions sx={{ p: 2 }}>
             <Button onClick={() => setMonthModalOpen(false)} variant="contained">
+              Close
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Area Tasks Modal */}
+        <Dialog 
+          open={areaModalOpen} 
+          onClose={() => setAreaModalOpen(false)} 
+          maxWidth="md" 
+          fullWidth
+        >
+          <DialogTitle>
+            {selectedArea && `Tasks for ${selectedArea.areaName}`}
+          </DialogTitle>
+          <DialogContent sx={{ pt: 2 }}>
+            {areaTasksForModal.length > 0 ? (
+              <Box>
+                {areaTasksByStatus.map((statusGroup) => (
+                  <Box key={statusGroup.status} sx={{ mb: 3 }}>
+                    <Typography 
+                      variant="h6" 
+                      sx={{ 
+                        mb: 2, 
+                        fontWeight: 700,
+                        textTransform: 'capitalize',
+                        color: statusGroup.status === 'pending' ? '#FF9800' : statusGroup.status === 'in_progress' ? '#2196F3' : '#4CAF50'
+                      }}
+                    >
+                      {statusGroup.status === 'in_progress' ? 'In Progress' : statusGroup.status.charAt(0).toUpperCase() + statusGroup.status.slice(1)} ({statusGroup.tasks.length})
+                    </Typography>
+                    <TableContainer>
+                      <Table size="small">
+                        <TableHead sx={{ backgroundColor: '#f5f5f5' }}>
+                          <TableRow>
+                            <TableCell sx={{ fontWeight: 700 }}>Property</TableCell>
+                            <TableCell sx={{ fontWeight: 700 }}>Task</TableCell>
+                            <TableCell sx={{ fontWeight: 700 }}>Vendor</TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 700 }}>Cost (kr)</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {statusGroup.tasks.map((task) => (
+                            <TableRow key={task.id}>
+                              <TableCell>{task.property_name}</TableCell>
+                              <TableCell sx={{ maxWidth: 300 }}>
+                                <Typography sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                  {task.description || '-'}
+                                </Typography>
+                              </TableCell>
+                              <TableCell>{task.vendor_name}</TableCell>
+                              <TableCell align="right" sx={{ fontWeight: 600 }}>
+                                {formatPrice(task.final_price || 0)}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                          <TableRow sx={{ backgroundColor: '#f9f9f9', fontWeight: 700 }}>
+                            <TableCell colSpan={3} align="right" sx={{ fontWeight: 700 }}>
+                              Subtotal:
+                            </TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 700, color: '#1565C0' }}>
+                              {formatPrice(statusGroup.total)}
+                            </TableCell>
+                          </TableRow>
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </Box>
+                ))}
+                <Box sx={{ mt: 3, pt: 2, borderTop: '2px solid #e0e0e0' }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, textAlign: 'right' }}>
+                    Grand Total: {formatPrice(areaTasksForModal.reduce((sum, t) => sum + (t.final_price || 0), 0))} kr
+                  </Typography>
+                </Box>
+              </Box>
+            ) : selectedArea ? (
+              <Typography color="textSecondary" align="center" sx={{ py: 3 }}>
+                No tasks for {selectedArea.areaName}
+              </Typography>
+            ) : null}
+          </DialogContent>
+          <DialogActions sx={{ p: 2 }}>
+            <Button onClick={() => setAreaModalOpen(false)} variant="contained">
               Close
             </Button>
           </DialogActions>
