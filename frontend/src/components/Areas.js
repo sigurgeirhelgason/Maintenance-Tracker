@@ -25,7 +25,7 @@ import {
   TableHead,
   TableRow,
 } from '@mui/material';
-import { Add as AddIcon } from '@mui/icons-material';
+import { Add as AddIcon, ArrowUpward as ArrowUpIcon, ArrowDownward as ArrowDownIcon } from '@mui/icons-material';
 import PageHeader from './Layout/PageHeader';
 import DetailPanel from './shared/DetailPanel';
 import DetailField from './shared/DetailField';
@@ -56,6 +56,8 @@ const Areas = () => {
   const [selectedArea, setSelectedArea] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [sortBy, setSortBy] = useState('type');
+  const [sortDirection, setSortDirection] = useState('asc');
   const { notification, showNotification, handleCloseNotification } = useNotification();
   const { confirmDialog, openConfirmDialog, handleConfirmDialogClose, handleConfirmDialogConfirm } = useConfirmDialog();
   const [formData, setFormData] = useState({
@@ -75,7 +77,14 @@ const Areas = () => {
     }
   }, [selectedProperty]);
 
-
+  const handleSortClick = (field) => {
+    if (sortBy === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortBy(field);
+      setSortDirection('asc');
+    }
+  };
 
   const getAreasByFloor = () => {
     // Group areas by floor (0 = garden, 1+ = regular floors)
@@ -130,12 +139,47 @@ const Areas = () => {
       if (!grouped[floor]) grouped[floor] = [];
       grouped[floor].push(area);
     });
-    // sort areas within each floor by name/type
+    // sort areas within each floor based on sortBy and sortDirection
     Object.keys(grouped).forEach(f => {
-      grouped[f].sort((a, b) => (a.name || a.type).localeCompare(b.name || b.type));
+      grouped[f].sort((a, b) => {
+        let aValue = '';
+        let bValue = '';
+
+        switch (sortBy) {
+          case 'type':
+            aValue = a.type || '';
+            bValue = b.type || '';
+            break;
+          case 'name':
+            aValue = a.name || '';
+            bValue = b.name || '';
+            break;
+          case 'floor':
+            aValue = a.floor ?? 1;
+            bValue = b.floor ?? 1;
+            break;
+          case 'description':
+            aValue = a.description || '';
+            bValue = b.description || '';
+            break;
+          default:
+            aValue = a.name || a.type || '';
+            bValue = b.name || b.type || '';
+        }
+
+        if (typeof aValue === 'string') {
+          aValue = aValue.toLowerCase();
+          bValue = bValue.toLowerCase();
+          const comparison = aValue.localeCompare(bValue);
+          return sortDirection === 'asc' ? comparison : -comparison;
+        } else {
+          const comparison = aValue - bValue;
+          return sortDirection === 'asc' ? comparison : -comparison;
+        }
+      });
     });
     return grouped;
-  }, [areas]);
+  }, [areas, sortBy, sortDirection]);
 
   const handlePropertyChange = (e) => {
     setSelectedProperty(e.target.value);
@@ -309,10 +353,42 @@ const Areas = () => {
                 <Table size="small">
                   <TableHead sx={{ bgcolor: '#F5F5F5' }}>
                     <TableRow>
-                      <TableCell sx={{ fontWeight: 700, minWidth: 180 }}>Type</TableCell>
-                      <TableCell sx={{ fontWeight: 700, minWidth: 160 }}>Name</TableCell>
-                      <TableCell sx={{ fontWeight: 700, minWidth: 80 }}>Floor</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>Description</TableCell>
+                      <TableCell
+                        sx={{ fontWeight: 700, minWidth: 180, cursor: 'pointer', userSelect: 'none' }}
+                        onClick={() => handleSortClick('type')}
+                      >
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          Type
+                          {sortBy === 'type' && (sortDirection === 'asc' ? <ArrowUpIcon sx={{ fontSize: 16 }} /> : <ArrowDownIcon sx={{ fontSize: 16 }} />)}
+                        </Box>
+                      </TableCell>
+                      <TableCell
+                        sx={{ fontWeight: 700, minWidth: 160, cursor: 'pointer', userSelect: 'none' }}
+                        onClick={() => handleSortClick('name')}
+                      >
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          Name
+                          {sortBy === 'name' && (sortDirection === 'asc' ? <ArrowUpIcon sx={{ fontSize: 16 }} /> : <ArrowDownIcon sx={{ fontSize: 16 }} />)}
+                        </Box>
+                      </TableCell>
+                      <TableCell
+                        sx={{ fontWeight: 700, minWidth: 80, cursor: 'pointer', userSelect: 'none' }}
+                        onClick={() => handleSortClick('floor')}
+                      >
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          Floor
+                          {sortBy === 'floor' && (sortDirection === 'asc' ? <ArrowUpIcon sx={{ fontSize: 16 }} /> : <ArrowDownIcon sx={{ fontSize: 16 }} />)}
+                        </Box>
+                      </TableCell>
+                      <TableCell
+                        sx={{ fontWeight: 700, cursor: 'pointer', userSelect: 'none' }}
+                        onClick={() => handleSortClick('description')}
+                      >
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          Description
+                          {sortBy === 'description' && (sortDirection === 'asc' ? <ArrowUpIcon sx={{ fontSize: 16 }} /> : <ArrowDownIcon sx={{ fontSize: 16 }} />)}
+                        </Box>
+                      </TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>

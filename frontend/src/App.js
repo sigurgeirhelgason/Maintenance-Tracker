@@ -16,6 +16,7 @@ import Areas from './components/Areas';
 import Tasks from './components/Tasks';
 import Vendors from './components/Vendors';
 import TaskTypes from './components/TaskTypes';
+import Reports from './components/Reports';
 import Login from './components/Login';
 import Register from './components/Register';
 
@@ -179,6 +180,8 @@ function AppContent() {
             <Route path="/tasks" element={<Tasks />} />
             <Route path="/vendors" element={<Vendors />} />
             <Route path="/tasktypes" element={<TaskTypes />} />
+            <Route path="/reports" element={<Reports />} />
+            <Route path="/reports/:reportType" element={<Reports />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Box>

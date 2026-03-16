@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Drawer,
@@ -14,6 +14,7 @@ import {
   useTheme,
   useMediaQuery,
   Button,
+  Collapse,
 } from '@mui/material';
 import {
   Dashboard as DashboardIcon,
@@ -26,6 +27,9 @@ import {
   Menu as MenuIcon,
   Close as CloseIcon,
   Logout as LogoutIcon,
+  ExpandLess as ExpandLessIcon,
+  ExpandMore as ExpandMoreIcon,
+  Assessment as ReportsIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../../AuthContext';
 
@@ -36,6 +40,7 @@ const Sidebar = ({ open, setOpen }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const prevIsMobileRef = useRef(isMobile);
+  const [expandedItems, setExpandedItems] = useState({});
 
   // Auto-close mobile drawer only when transitioning from mobile to desktop
   useEffect(() => {
@@ -50,13 +55,68 @@ const Sidebar = ({ open, setOpen }) => {
     navigate('/login');
   };
 
+  const toggleExpanded = (key) => {
+    setExpandedItems(prev => {
+      // If clicking the same item, toggle it closed
+      if (prev[key]) {
+        return { [key]: false };
+      }
+      // If clicking a different item, close all others and open this one only
+      return { [key]: true };
+    });
+  };
+
+  const closeAllExpanded = () => {
+    setExpandedItems({});
+  };
+
   const menuItems = [
-    { path: '/', label: 'Dashboard', icon: DashboardIcon },
-    { path: '/properties', label: 'Properties', icon: PropertiesIcon },
-    { path: '/areas', label: 'Rooms', icon: ComponentsIcon },
-    { path: '/tasks', label: 'Tasks', icon: TasksIcon },
-    { path: '/vendors', label: 'Vendors', icon: VendorsIcon },
-    { path: '/tasktypes', label: 'Task Types', icon: CategoryIcon },
+    { 
+      id: 'dashboard',
+      path: '/', 
+      label: 'Dashboard', 
+      icon: DashboardIcon 
+    },
+    { 
+      id: 'properties',
+      path: '/properties', 
+      label: 'Properties', 
+      icon: PropertiesIcon,
+      children: [
+        { path: '/areas', label: 'Rooms', icon: ComponentsIcon }
+      ]
+    },
+    { 
+      id: 'tasks',
+      path: '/tasks', 
+      label: 'Tasks', 
+      icon: TasksIcon,
+      children: [
+        { path: '/tasktypes', label: 'Task Types', icon: CategoryIcon }
+      ]
+    },
+    { 
+      id: 'vendors',
+      path: '/vendors', 
+      label: 'Vendors', 
+      icon: VendorsIcon 
+    },
+    { 
+      id: 'reports',
+      path: '/reports', 
+      label: 'Reports', 
+      icon: ReportsIcon,
+      children: [
+        { path: '/reports/cost-analysis', label: 'Cost Analysis', icon: ReportsIcon },
+        { path: '/reports/task-status', label: 'Task Status', icon: ReportsIcon },
+        { path: '/reports/vendor-performance', label: 'Vendor Performance', icon: ReportsIcon },
+        { path: '/reports/maintenance-history', label: 'Maintenance History', icon: ReportsIcon },
+        { path: '/reports/monthly-costs', label: 'Monthly Costs', icon: ReportsIcon },
+        { path: '/reports/area-maintenance', label: 'Area Maintenance', icon: ReportsIcon },
+        { path: '/reports/schedule', label: 'Maintenance Schedule', icon: ReportsIcon },
+        { path: '/reports/vat-refunds', label: 'VAT Refunds', icon: ReportsIcon },
+      ]
+    },
   ];
 
   const drawerWidth = 240;
@@ -100,37 +160,105 @@ const Sidebar = ({ open, setOpen }) => {
         {menuItems.map((item) => {
           const Icon = item.icon;
           const isActive = location.pathname === item.path;
+          const hasChildren = item.children && item.children.length > 0;
+          
+          // Check if any child item is active
+          const isChildActive = hasChildren && item.children.some(child => location.pathname === child.path);
+          
+          // Keep expanded if manually expanded or if a child is active
+          const isExpanded = expandedItems[item.id] || isChildActive;
 
           return (
-            <ListItem key={item.path} disablePadding sx={{ mb: 1 }}>
-              <ListItemButton
-                component={Link}
-                to={item.path}
-                onClick={() => isMobile && setOpen(false)}
-                sx={{
-                  borderRadius: 1,
-                  color: isActive ? theme.palette.primary.main : 'inherit',
-                  backgroundColor: isActive
-                    ? theme.palette.primary.main + '15'
-                    : 'transparent',
-                  borderLeft: isActive ? `4px solid ${theme.palette.primary.main}` : 'none',
-                  '&:hover': {
-                    backgroundColor: theme.palette.action.hover,
-                  },
-                  transition: 'all 0.2s ease',
-                }}
-              >
-                <ListItemIcon
+            <Box key={item.id}>
+              <ListItem disablePadding sx={{ mb: 0.5 }}>
+                <ListItemButton
+                  component={Link}
+                  to={item.path}
+                  onClick={() => {
+                    if (hasChildren) {
+                      toggleExpanded(item.id);
+                    } else {
+                      closeAllExpanded();
+                    }
+                    isMobile && setOpen(false);
+                  }}
                   sx={{
-                    minWidth: 40,
+                    borderRadius: 1,
                     color: isActive ? theme.palette.primary.main : 'inherit',
+                    backgroundColor: isActive
+                      ? theme.palette.primary.main + '15'
+                      : 'transparent',
+                    borderLeft: isActive ? `4px solid ${theme.palette.primary.main}` : 'none',
+                    '&:hover': {
+                      backgroundColor: theme.palette.action.hover,
+                    },
+                    transition: 'all 0.2s ease',
                   }}
                 >
-                  <Icon />
-                </ListItemIcon>
-                {open && <ListItemText primary={item.label} />}
-              </ListItemButton>
-            </ListItem>
+                  <ListItemIcon
+                    sx={{
+                      minWidth: 40,
+                      color: isActive ? theme.palette.primary.main : 'inherit',
+                    }}
+                  >
+                    <Icon />
+                  </ListItemIcon>
+                  {open && <ListItemText primary={item.label} />}
+                  {open && hasChildren && (
+                    <Box sx={{ ml: 'auto' }}>
+                      {isExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                    </Box>
+                  )}
+                </ListItemButton>
+              </ListItem>
+
+              {/* Child Items */}
+              {hasChildren && (
+                <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+                  <List component="div" disablePadding sx={{ pl: 2 }}>
+                    {item.children.map((child) => {
+                      const ChildIcon = child.icon;
+                      const isChildActive = location.pathname === child.path;
+
+                      return (
+                        <ListItem key={child.path} disablePadding sx={{ mb: 0.5 }}>
+                          <ListItemButton
+                            component={Link}
+                            to={child.path}
+                            onClick={() => {
+                              closeAllExpanded();
+                              isMobile && setOpen(false);
+                            }}
+                            sx={{
+                              borderRadius: 1,
+                              color: isChildActive ? theme.palette.primary.main : 'inherit',
+                              backgroundColor: isChildActive
+                                ? theme.palette.primary.main + '15'
+                                : 'transparent',
+                              borderLeft: isChildActive ? `4px solid ${theme.palette.primary.main}` : 'none',
+                              '&:hover': {
+                                backgroundColor: theme.palette.action.hover,
+                              },
+                              transition: 'all 0.2s ease',
+                            }}
+                          >
+                            <ListItemIcon
+                              sx={{
+                                minWidth: 40,
+                                color: isChildActive ? theme.palette.primary.main : 'inherit',
+                              }}
+                            >
+                              <ChildIcon />
+                            </ListItemIcon>
+                            {open && <ListItemText primary={child.label} />}
+                          </ListItemButton>
+                        </ListItem>
+                      );
+                    })}
+                  </List>
+                </Collapse>
+              )}
+            </Box>
           );
         })}
       </List>

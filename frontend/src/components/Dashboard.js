@@ -79,12 +79,19 @@ const StatCard = ({ title, value, subtitle, icon: Icon, color, bgcolor, borderCo
 
 const Dashboard = () => {
   const theme = useTheme();
+  
+  // Format number with dots as thousand separators (Icelandic format)
+  const formatPrice = (num) => {
+    return Math.floor(num).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  };
+  
   const [stats, setStats] = useState({
     openWorkOrders: 0,
     overdueTasks: 0,
     upcomingMaintenance: 0,
     possibleRefund: 0,
     totalInvestmentThisYear: 0,
+    totalEstimatedCost: 0,
   });
   const [properties, setProperties] = useState([]);
   const [tasks, setTasks] = useState([]);
@@ -134,7 +141,7 @@ const Dashboard = () => {
         // Fall back to final_work_price for backward compatibility
         return sum + (parseFloat(t.final_work_price) || 0);
       }, 0);
-      const possibleRefund = Math.floor(totalVatRefundablePrice * 0.35);
+      const possibleRefund = Math.floor(totalVatRefundablePrice * 0.24 * 0.35);
 
       // Calculate total investment this year (sum of final_price for tasks created this year)
       const currentYear = new Date().getFullYear();
@@ -147,6 +154,11 @@ const Dashboard = () => {
         return sum + (parseFloat(t.final_price) || 0);
       }, 0);
 
+      // Calculate total estimated cost for all tasks this year
+      const totalEstimatedCost = tasksThisYear.reduce((sum, t) => {
+        return sum + (parseFloat(t.estimated_price) || 0);
+      }, 0);
+
       setTasks(tasks.slice(0, 10));
       setProperties(properties.slice(0, 3));
       setVendors(vendors.slice(0, 5));
@@ -157,6 +169,7 @@ const Dashboard = () => {
         upcomingMaintenance: Math.floor(openWorkOrders * 0.5), // Placeholder calculation
         possibleRefund,
         totalInvestmentThisYear,
+        totalEstimatedCost,
       });
     } catch (err) {
       setError('Failed to load dashboard data');
@@ -174,6 +187,56 @@ const Dashboard = () => {
     );
   }
 
+  const statisticsCards = [
+    {
+      title: 'Open Work Orders',
+      value: stats.openWorkOrders,
+      subtitle: `${stats.overdueTasks} Overdue`,
+      icon: WorkIcon,
+      color: '#2196f3',
+      onClick: () => {
+        setSelectedStatsCategory('openWorkOrders');
+        setStatsModalOpen(true);
+      },
+    },
+    // {
+    //   title: 'Upcoming Maintenance',
+    //   value: stats.upcomingMaintenance,
+    //   subtitle: 'This Week',
+    //   icon: MaintenanceIcon,
+    //   color: '#4caf50',
+    //   onClick: () => {
+    //     setSelectedStatsCategory('upcomingMaintenance');
+    //     setStatsModalOpen(true);
+    //   },
+    // },
+    {
+      title: 'Possible VAT Refund',
+      value: `${formatPrice(stats.possibleRefund)} Kr.`,
+      subtitle: '35% of VAT (24%)',
+      icon: RefundIcon,
+      color: '#4caf50',
+      onClick: () => {
+        setSelectedStatsCategory('possibleRefund');
+        setStatsModalOpen(true);
+      },
+    },
+    {
+      title: 'Total Investment This Year',
+      value: `${formatPrice(stats.totalInvestmentThisYear)} Kr.`,
+      subtitle: 'Based on final prices',
+      icon: WorkIcon,
+      color: '#2196f3',
+    },
+    {
+      title: 'Total Estimated Cost',
+      value: `${formatPrice(stats.totalEstimatedCost)} Kr.`,
+      subtitle: "This year's tasks",
+      icon: WorkIcon,
+      color: '#ff9800',
+    },
+  ];
+
   return (
     <Box>
       <PageHeader
@@ -186,54 +249,18 @@ const Dashboard = () => {
 
       {/* Statistics Cards */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid item xs={12} sm={6} md={3}>
-          <StatCard
-            title="Open Work Orders"
-            value={stats.openWorkOrders}
-            subtitle={`${stats.overdueTasks} Overdue`}
-            icon={WorkIcon}
-            color="#2196f3"
-            onClick={() => {
-              setSelectedStatsCategory('openWorkOrders');
-              setStatsModalOpen(true);
-            }}
-          />
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <StatCard
-            title="Upcoming Maintenance"
-            value={stats.upcomingMaintenance}
-            subtitle="This Week"
-            icon={MaintenanceIcon}
-            color="#4caf50"
-            onClick={() => {
-              setSelectedStatsCategory('upcomingMaintenance');
-              setStatsModalOpen(true);
-            }}
-          />
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <StatCard
-            title="Possible VAT Refund"
-            value={`${stats.possibleRefund.toLocaleString('is-IS')} Kr.`}
-            subtitle="35% of work price"
-            icon={RefundIcon}
-            color="#4caf50"
-            onClick={() => {
-              setSelectedStatsCategory('possibleRefund');
-              setStatsModalOpen(true);
-            }}
-          />
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <StatCard
-            title="Total Investment This Year"
-            value={`${stats.totalInvestmentThisYear.toLocaleString('is-IS')} Kr.`}
-            subtitle="Based on final prices"
-            icon={WorkIcon}
-            color="#2196f3"
-          />
-        </Grid>
+        {statisticsCards.map((card, index) => (
+          <Grid item xs={12} sm={6} md={3} key={index}>
+            <StatCard
+              title={card.title}
+              value={card.value}
+              subtitle={card.subtitle}
+              icon={card.icon}
+              color={card.color}
+              onClick={card.onClick}
+            />
+          </Grid>
+        ))}
       </Grid>
 
       {/* Main Content Grid */}
@@ -338,7 +365,7 @@ const Dashboard = () => {
                           {task.vendor_details?.name || '-'}
                         </Typography>
                         <Typography variant="caption" sx={{ fontWeight: 500, whiteSpace: 'nowrap', flex: 0.7 }}>
-                          {task.cost ? `$${task.cost.toFixed(2)}` : '-'}
+                          {task.cost ? `${formatPrice(task.cost)} Kr.` : '-'}
                         </Typography>
                         <Chip
                           label={task.status === 'pending' ? 'Pending' : 'In Progress'}
@@ -485,7 +512,7 @@ const Dashboard = () => {
                       <strong>Vendor:</strong> {task.vendor_details?.name || '-'}
                     </Typography>
                     <Typography variant="caption" sx={{ color: 'textSecondary' }}>
-                      <strong>Cost:</strong> {task.cost ? `$${task.cost.toFixed(2)}` : '-'}
+                        <strong>Cost:</strong> {task.cost ? `${formatPrice(task.cost)} Kr.` : '-'}
                     </Typography>
                   </Box>
                 </ListItem>
@@ -533,7 +560,7 @@ const Dashboard = () => {
                       <strong>Vendor:</strong> {task.vendor_details?.name || '-'}
                     </Typography>
                     <Typography variant="caption" sx={{ color: 'textSecondary' }}>
-                      <strong>Cost:</strong> {task.cost ? `$${task.cost.toFixed(2)}` : '-'}
+                      <strong>Cost:</strong> {task.cost ? `${formatPrice(task.cost)} Kr.` : '-'}
                     </Typography>
                   </Box>
                 </ListItem>
@@ -561,7 +588,7 @@ const Dashboard = () => {
                   } else {
                     vatRefundableAmount = parseFloat(task.final_work_price) || 0;
                   }
-                  const refundAmount = Math.floor(vatRefundableAmount * 0.35);
+                  const refundAmount = Math.floor(vatRefundableAmount * 0.24 * 0.35);
                   
                   return (
                     <ListItem
@@ -595,10 +622,10 @@ const Dashboard = () => {
                       </Box>
                       <Box sx={{ display: 'flex', gap: 3, width: '100%', mt: 1 }}>
                         <Typography variant="caption" sx={{ color: 'textSecondary' }}>
-                          <strong>VAT Refundable:</strong> {vatRefundableAmount.toFixed(0)} Kr.
+                          <strong>VAT Refundable:</strong> {formatPrice(vatRefundableAmount)} Kr.
                         </Typography>
                         <Typography variant="caption" sx={{ fontWeight: 600, color: '#4caf50' }}>
-                          <strong>Refund (35%):</strong> {refundAmount.toLocaleString('is-IS')} Kr.
+                          <strong>Refund (35% of 24% VAT):</strong> {formatPrice(refundAmount)} Kr.
                         </Typography>
                       </Box>
                     </ListItem>

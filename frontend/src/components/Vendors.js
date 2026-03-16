@@ -63,6 +63,7 @@ const Vendors = () => {
   const [sortBy, setSortBy] = useState('name');
   const [sortDirection, setSortDirection] = useState('asc');
   const [taskTypeFilter, setTaskTypeFilter] = useState(null);
+  const [favoriteFilter, setFavoriteFilter] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     contact_person: '',
@@ -124,8 +125,8 @@ const Vendors = () => {
       setEditing(vendor);
       setFormData({
         ...vendor,
-        task_type: vendor.task_type?.id || null,
-        secondary_task_types: vendor.secondary_task_types?.map(t => t.id) || [],
+        task_type: (typeof vendor.task_type === 'object' ? vendor.task_type?.id : vendor.task_type) || null,
+        secondary_task_types: (vendor.secondary_task_types_details || vendor.secondary_task_types || []).map(t => (typeof t === 'object' ? t.id : t)) || [],
       });
     } else {
       setEditing(null);
@@ -194,7 +195,9 @@ const Vendors = () => {
   const toggleFavorite = async (vendor) => {
     try {
       await axios.patch(`/api/vendors/${vendor.id}/`, { favorite: !vendor.favorite });
-      fetch();
+      await fetch();
+      // Update selectedVendor to reflect the new favorite status
+      setSelectedVendor(prev => prev ? { ...prev, favorite: !prev.favorite } : null);
       showNotification(
         vendor.favorite ? 'Vendor removed from favorites' : 'Vendor added to favorites',
         'success'
@@ -221,9 +224,12 @@ const Vendors = () => {
         vendor.phone?.includes(searchTerm) ||
         vendor.email?.toLowerCase().includes(searchTerm.toLowerCase());
       
-      const matchesTaskType = !taskTypeFilter || vendor.task_type?.id === taskTypeFilter;
+      const matchesTaskType = !taskTypeFilter || 
+        vendor.task_type?.id === parseInt(taskTypeFilter) ||
+        vendor.secondary_task_types_details?.some(type => type.id === parseInt(taskTypeFilter));
+      const matchesFavorite = !favoriteFilter || vendor.favorite;
       
-      return matchesSearch && matchesTaskType;
+      return matchesSearch && matchesTaskType && matchesFavorite;
     });
 
     result.sort((a, b) => {
@@ -243,7 +249,7 @@ const Vendors = () => {
     });
 
     return result;
-  }, [vendors, searchTerm, sortBy, sortDirection, taskTypeFilter]);
+  }, [vendors, searchTerm, sortBy, sortDirection, taskTypeFilter, favoriteFilter]);
 
   if (loading) {
     return (
@@ -306,18 +312,6 @@ const Vendors = () => {
                         },
                       }}
                     >
-                      <Box sx={{ position: 'absolute', top: 8, right: 8, zIndex: 10 }}>
-                        <IconButton
-                          size="small"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleFavorite(vendor);
-                          }}
-                          sx={{ color: '#ffc107' }}
-                        >
-                          <StarIcon sx={{ fontSize: 20 }} />
-                        </IconButton>
-                      </Box>
                       <CardContent sx={{ flex: 1 }}>
                         <Typography variant="h6" sx={{ fontWeight: 600, mb: 1, pr: 3 }}>
                           {vendor.name}
@@ -383,12 +377,23 @@ const Vendors = () => {
                     ))}
                   </Select>
                 </FormControl>
-                {(searchTerm || taskTypeFilter) && (
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      size="small"
+                      checked={favoriteFilter}
+                      onChange={(e) => setFavoriteFilter(e.target.checked)}
+                    />
+                  }
+                  label="Favorites Only"
+                />
+                {(searchTerm || taskTypeFilter || favoriteFilter) && (
                   <Button
                     size="small"
                     onClick={() => {
                       setSearchTerm('');
                       setTaskTypeFilter(null);
+                      setFavoriteFilter(false);
                     }}
                   >
                     Clear Filters
@@ -397,31 +402,6 @@ const Vendors = () => {
               </Box>
             </Paper>
 
-            {/* Sort Buttons */}
-            <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
-              <Typography variant="body2" sx={{ fontWeight: 600, display: 'flex', alignItems: 'center' }}>
-                Sort By:
-              </Typography>
-              <Button
-                size="small"
-                variant={sortBy === 'name' ? 'contained' : 'outlined'}
-                onClick={() => handleSortClick('name')}
-                endIcon={sortBy === 'name' && (sortDirection === 'asc' ? <ArrowUpIcon /> : <ArrowDownIcon />)}
-                sx={{ textTransform: 'none' }}
-              >
-                Name
-              </Button>
-              <Button
-                size="small"
-                variant={sortBy === 'contact_person' ? 'contained' : 'outlined'}
-                onClick={() => handleSortClick('contact_person')}
-                endIcon={sortBy === 'contact_person' && (sortDirection === 'asc' ? <ArrowUpIcon /> : <ArrowDownIcon />)}
-                sx={{ textTransform: 'none' }}
-              >
-                Contact
-              </Button>
-            </Box>
-
             {/* Vendors Table */}
             <Box sx={{ display: 'flex', gap: 2 }}>
               <TableContainer component={Paper} sx={{ flex: 1 }}>
@@ -429,9 +409,25 @@ const Vendors = () => {
                   <TableHead sx={{ bgcolor: '#F5F5F5' }}>
                     <TableRow>
                       <TableCell sx={{ fontWeight: 700, minWidth: 40 }}>Favorite</TableCell>
-                      <TableCell sx={{ fontWeight: 700, minWidth: 200 }}>Vendor Name</TableCell>
+                      <TableCell
+                        sx={{ fontWeight: 700, minWidth: 200, cursor: 'pointer', userSelect: 'none' }}
+                        onClick={() => handleSortClick('name')}
+                      >
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          Vendor Name
+                          {sortBy === 'name' && (sortDirection === 'asc' ? <ArrowUpIcon sx={{ fontSize: 16 }} /> : <ArrowDownIcon sx={{ fontSize: 16 }} />)}
+                        </Box>
+                      </TableCell>
                       <TableCell sx={{ fontWeight: 700, minWidth: 150 }}>Task Type</TableCell>
-                      <TableCell sx={{ fontWeight: 700, minWidth: 120 }}>Contact Person</TableCell>
+                      <TableCell
+                        sx={{ fontWeight: 700, minWidth: 120, cursor: 'pointer', userSelect: 'none' }}
+                        onClick={() => handleSortClick('contact_person')}
+                      >
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          Contact Person
+                          {sortBy === 'contact_person' && (sortDirection === 'asc' ? <ArrowUpIcon sx={{ fontSize: 16 }} /> : <ArrowDownIcon sx={{ fontSize: 16 }} />)}
+                        </Box>
+                      </TableCell>
                       <TableCell sx={{ fontWeight: 700, minWidth: 120 }}>Phone</TableCell>
                       <TableCell sx={{ fontWeight: 700, minWidth: 150 }}>Email</TableCell>
                     </TableRow>
@@ -589,6 +585,7 @@ const Vendors = () => {
         vendor={selectedVendor}
         onClose={handleDetailModalClose}
         onEdit={() => { handleDetailModalClose(); handleOpen(selectedVendor); }}
+        onToggleFavorite={toggleFavorite}
       />
 
       {/* Notification Snackbar */}

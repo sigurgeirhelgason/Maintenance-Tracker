@@ -71,7 +71,7 @@ const Tasks = () => {
   const [sortBy, setSortBy] = useState('priority');
   const [sortDirection, setSortDirection] = useState('desc');
   const [filters, setFilters] = useState({
-    status: null,
+    status: ['pending', 'in_progress'],
     priority: null,
     property: null,
   });
@@ -135,7 +135,7 @@ const Tasks = () => {
     let result = tasks.filter(task => {
       const matchesSearch = task.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (task.vendor?.name || '').toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesStatus = !filters.status || task.status === filters.status;
+      const matchesStatus = filters.status.length === 0 || filters.status.includes(task.status);
       const matchesPriority = !filters.priority || task.priority === filters.priority;
       const matchesProperty = !filters.property || task.property === filters.property;
 
@@ -170,6 +170,12 @@ const Tasks = () => {
           const roomA = a.areas?.[0] || 0;
           const roomB = b.areas?.[0] || 0;
           comparison = roomA - roomB;
+          break;
+        case 'description':
+          comparison = (a.description || '').localeCompare(b.description || '');
+          break;
+        case 'property':
+          comparison = String(a.property || '').localeCompare(String(b.property || ''));
           break;
         default:
           return 0;
@@ -719,17 +725,34 @@ const Tasks = () => {
                 }}
                 sx={{ minWidth: 250 }}
               />
-              <FormControl size="small" sx={{ minWidth: 150 }}>
+              <FormControl size="small" sx={{ minWidth: 200 }}>
                 <InputLabel>Status</InputLabel>
                 <Select
-                  value={filters.status || ''}
-                  onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value || null }))}
+                  multiple
+                  value={filters.status}
+                  onChange={(e) => setFilters(prev => ({ ...prev, status: typeof e.target.value === 'string' ? e.target.value.split(',') : e.target.value }))}
                   label="Status"
+                  renderValue={(selected) => {
+                    const labels = {
+                      pending: 'Open',
+                      in_progress: 'In Progress',
+                      finished: 'Completed'
+                    };
+                    return selected.map(s => labels[s]).join(', ');
+                  }}
                 >
-                  <MenuItem value="">All Statuses</MenuItem>
-                  <MenuItem value="pending">Open</MenuItem>
-                  <MenuItem value="in_progress">In Progress</MenuItem>
-                  <MenuItem value="finished">Completed</MenuItem>
+                  <MenuItem value="pending">
+                    <Checkbox size="small" checked={filters.status.includes('pending')} />
+                    Open
+                  </MenuItem>
+                  <MenuItem value="in_progress">
+                    <Checkbox size="small" checked={filters.status.includes('in_progress')} />
+                    In Progress
+                  </MenuItem>
+                  <MenuItem value="finished">
+                    <Checkbox size="small" checked={filters.status.includes('finished')} />
+                    Completed
+                  </MenuItem>
                 </Select>
               </FormControl>
               <FormControl size="small" sx={{ minWidth: 150 }}>
@@ -745,12 +768,12 @@ const Tasks = () => {
                   <MenuItem value="low">Low</MenuItem>
                 </Select>
               </FormControl>
-              {(searchTerm || filters.status || filters.priority) && (
+              {(searchTerm || filters.status.length > 0 || filters.status.length < 3 || filters.priority) && (
                 <Button
                   size="small"
                   onClick={() => {
                     setSearchTerm('');
-                    setFilters({ status: null, priority: null, property: null });
+                    setFilters({ status: ['pending', 'in_progress'], priority: null, property: null });
                   }}
                 >
                   Clear Filters
@@ -758,58 +781,6 @@ const Tasks = () => {
               )}
             </Box>
           </Paper>
-
-          {/* Order By Buttons */}
-          <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
-            <Typography variant="body2" sx={{ fontWeight: 600, display: 'flex', alignItems: 'center' }}>
-              Order By:
-            </Typography>
-            <Button
-              size="small"
-              variant={sortBy === 'priority' ? 'contained' : 'outlined'}
-              onClick={() => handleSortClick('priority')}
-              endIcon={sortBy === 'priority' && (sortDirection === 'asc' ? <ArrowUpIcon /> : <ArrowDownIcon />)}
-              sx={{ textTransform: 'none' }}
-            >
-              Priority
-            </Button>
-            <Button
-              size="small"
-              variant={sortBy === 'due_date' ? 'contained' : 'outlined'}
-              onClick={() => handleSortClick('due_date')}
-              endIcon={sortBy === 'due_date' && (sortDirection === 'asc' ? <ArrowUpIcon /> : <ArrowDownIcon />)}
-              sx={{ textTransform: 'none' }}
-            >
-              Due Date
-            </Button>
-            <Button
-              size="small"
-              variant={sortBy === 'status' ? 'contained' : 'outlined'}
-              onClick={() => handleSortClick('status')}
-              endIcon={sortBy === 'status' && (sortDirection === 'asc' ? <ArrowUpIcon /> : <ArrowDownIcon />)}
-              sx={{ textTransform: 'none' }}
-            >
-              Status
-            </Button>
-            <Button
-              size="small"
-              variant={sortBy === 'cost' ? 'contained' : 'outlined'}
-              onClick={() => handleSortClick('cost')}
-              endIcon={sortBy === 'cost' && (sortDirection === 'asc' ? <ArrowUpIcon /> : <ArrowDownIcon />)}
-              sx={{ textTransform: 'none' }}
-            >
-              Cost
-            </Button>
-            <Button
-              size="small"
-              variant={sortBy === 'room' ? 'contained' : 'outlined'}
-              onClick={() => handleSortClick('room')}
-              endIcon={sortBy === 'room' && (sortDirection === 'asc' ? <ArrowUpIcon /> : <ArrowDownIcon />)}
-              sx={{ textTransform: 'none' }}
-            >
-              Room
-            </Button>
-          </Box>
 
           {filteredTasks.length === 0 ? (
             <Card>
@@ -827,13 +798,69 @@ const Tasks = () => {
                 <Table size="small">
                   <TableHead sx={{ bgcolor: '#F5F5F5' }}>
                     <TableRow>
-                      <TableCell sx={{ fontWeight: 700, minWidth: 40 }}>Priority</TableCell>
-                      <TableCell sx={{ fontWeight: 700, minWidth: 200 }}>Task</TableCell>
-                      <TableCell sx={{ fontWeight: 700, minWidth: 120 }}>Property</TableCell>
-                      <TableCell sx={{ fontWeight: 700, minWidth: 100 }}>Room</TableCell>
-                      <TableCell sx={{ fontWeight: 700, minWidth: 100 }}>Status</TableCell>
-                      <TableCell sx={{ fontWeight: 700, minWidth: 80 }}>Due Date</TableCell>
-                      <TableCell sx={{ fontWeight: 700, minWidth: 80, textAlign: 'right' }}>Cost</TableCell>
+                      <TableCell
+                        sx={{ fontWeight: 700, minWidth: 40, cursor: 'pointer', userSelect: 'none' }}
+                        onClick={() => handleSortClick('priority')}
+                      >
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          Priority
+                          {sortBy === 'priority' && (sortDirection === 'asc' ? <ArrowUpIcon sx={{ fontSize: 16 }} /> : <ArrowDownIcon sx={{ fontSize: 16 }} />)}
+                        </Box>
+                      </TableCell>
+                      <TableCell
+                        sx={{ fontWeight: 700, minWidth: 200, cursor: 'pointer', userSelect: 'none' }}
+                        onClick={() => handleSortClick('description')}
+                      >
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          Task
+                          {sortBy === 'description' && (sortDirection === 'asc' ? <ArrowUpIcon sx={{ fontSize: 16 }} /> : <ArrowDownIcon sx={{ fontSize: 16 }} />)}
+                        </Box>
+                      </TableCell>
+                      <TableCell
+                        sx={{ fontWeight: 700, minWidth: 120, cursor: 'pointer', userSelect: 'none' }}
+                        onClick={() => handleSortClick('property')}
+                      >
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          Property
+                          {sortBy === 'property' && (sortDirection === 'asc' ? <ArrowUpIcon sx={{ fontSize: 16 }} /> : <ArrowDownIcon sx={{ fontSize: 16 }} />)}
+                        </Box>
+                      </TableCell>
+                      <TableCell
+                        sx={{ fontWeight: 700, minWidth: 100, cursor: 'pointer', userSelect: 'none' }}
+                        onClick={() => handleSortClick('room')}
+                      >
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          Room
+                          {sortBy === 'room' && (sortDirection === 'asc' ? <ArrowUpIcon sx={{ fontSize: 16 }} /> : <ArrowDownIcon sx={{ fontSize: 16 }} />)}
+                        </Box>
+                      </TableCell>
+                      <TableCell
+                        sx={{ fontWeight: 700, minWidth: 100, cursor: 'pointer', userSelect: 'none' }}
+                        onClick={() => handleSortClick('status')}
+                      >
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          Status
+                          {sortBy === 'status' && (sortDirection === 'asc' ? <ArrowUpIcon sx={{ fontSize: 16 }} /> : <ArrowDownIcon sx={{ fontSize: 16 }} />)}
+                        </Box>
+                      </TableCell>
+                      <TableCell
+                        sx={{ fontWeight: 700, minWidth: 80, cursor: 'pointer', userSelect: 'none' }}
+                        onClick={() => handleSortClick('due_date')}
+                      >
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          Due Date
+                          {sortBy === 'due_date' && (sortDirection === 'asc' ? <ArrowUpIcon sx={{ fontSize: 16 }} /> : <ArrowDownIcon sx={{ fontSize: 16 }} />)}
+                        </Box>
+                      </TableCell>
+                      <TableCell
+                        sx={{ fontWeight: 700, minWidth: 80, textAlign: 'right', cursor: 'pointer', userSelect: 'none' }}
+                        onClick={() => handleSortClick('cost')}
+                      >
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, justifyContent: 'flex-end' }}>
+                          Cost
+                          {sortBy === 'cost' && (sortDirection === 'asc' ? <ArrowUpIcon sx={{ fontSize: 16 }} /> : <ArrowDownIcon sx={{ fontSize: 16 }} />)}
+                        </Box>
+                      </TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>

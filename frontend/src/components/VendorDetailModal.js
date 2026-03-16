@@ -21,12 +21,21 @@ import {
   Alert,
   IconButton,
 } from '@mui/material';
-import { Close as CloseIcon, Phone as PhoneIcon, Email as EmailIcon, LocationOn as LocationIcon, Star as StarIcon, StarBorder as StarBorderIcon } from '@mui/icons-material';
+import { Close as CloseIcon, Phone as PhoneIcon, Email as EmailIcon, LocationOn as LocationIcon, Star as StarIcon, StarBorder as StarBorderIcon, ArrowUpward as ArrowUpIcon, ArrowDownward as ArrowDownIcon } from '@mui/icons-material';
 
-const VendorDetailModal = ({ open, vendor, onClose, onEdit }) => {
+const VendorDetailModal = ({ open, vendor, onClose, onEdit, onToggleFavorite }) => {
   const [vendorTasks, setVendorTasks] = useState([]);
   const [tasksLoading, setTasksLoading] = useState(false);
   const [tasksError, setTasksError] = useState(null);
+  const [isFavorite, setIsFavorite] = useState(vendor?.favorite || false);
+  const [sortBy, setSortBy] = useState('description');
+  const [sortDirection, setSortDirection] = useState('asc');
+
+  useEffect(() => {
+    if (vendor) {
+      setIsFavorite(vendor.favorite || false);
+    }
+  }, [vendor?.id, vendor?.favorite]);
 
   useEffect(() => {
     if (open && vendor) {
@@ -47,7 +56,34 @@ const VendorDetailModal = ({ open, vendor, onClose, onEdit }) => {
       setTasksLoading(false);
     }
   };
+  const handleSortClick = (field) => {
+    if (sortBy === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortBy(field);
+      setSortDirection('asc');
+    }
+  };
 
+  const sortedTasks = React.useMemo(() => {
+    const tasks = [...vendorTasks];
+    tasks.sort((a, b) => {
+      let aValue = a[sortBy] || '';
+      let bValue = b[sortBy] || '';
+      
+      if (typeof aValue === 'string') {
+        aValue = aValue.toLowerCase();
+        bValue = bValue.toLowerCase();
+      }
+
+      if (sortDirection === 'asc') {
+        return aValue > bValue ? 1 : -1;
+      } else {
+        return aValue < bValue ? 1 : -1;
+      }
+    });
+    return tasks;
+  }, [vendorTasks, sortBy, sortDirection]);
   if (!vendor) return null;
 
   const getStatusColor = (status) => {
@@ -97,9 +133,21 @@ const VendorDetailModal = ({ open, vendor, onClose, onEdit }) => {
             {vendor.name}
           </Typography>
         </Box>
-        <IconButton size="small" onClick={onClose}>
-          <CloseIcon />
-        </IconButton>
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <IconButton 
+            size="small" 
+            onClick={() => {
+              setIsFavorite(!isFavorite);
+              onToggleFavorite?.(vendor);
+            }}
+            sx={{ color: isFavorite ? '#ffc107' : 'inherit' }}
+          >
+            {isFavorite ? <StarIcon /> : <StarBorderIcon />}
+          </IconButton>
+          <IconButton size="small" onClick={onClose}>
+            <CloseIcon />
+          </IconButton>
+        </Box>
       </DialogTitle>
 
       <DialogContent sx={{ pt: 2 }}>
@@ -202,15 +250,55 @@ const VendorDetailModal = ({ open, vendor, onClose, onEdit }) => {
                 <Table size="small">
                   <TableHead>
                     <TableRow sx={{ bgcolor: '#f5f5f5' }}>
-                      <TableCell sx={{ fontWeight: 700 }}>Task</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>Property</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>Status</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>Priority</TableCell>
-                      <TableCell sx={{ fontWeight: 700, textAlign: 'right' }}>Due Date</TableCell>
+                      <TableCell
+                        sx={{ fontWeight: 700, cursor: 'pointer', userSelect: 'none' }}
+                        onClick={() => handleSortClick('description')}
+                      >
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          Task
+                          {sortBy === 'description' && (sortDirection === 'asc' ? <ArrowUpIcon sx={{ fontSize: 16 }} /> : <ArrowDownIcon sx={{ fontSize: 16 }} />)}
+                        </Box>
+                      </TableCell>
+                      <TableCell
+                        sx={{ fontWeight: 700, cursor: 'pointer', userSelect: 'none' }}
+                        onClick={() => handleSortClick('property_details')}
+                      >
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          Property
+                          {sortBy === 'property_details' && (sortDirection === 'asc' ? <ArrowUpIcon sx={{ fontSize: 16 }} /> : <ArrowDownIcon sx={{ fontSize: 16 }} />)}
+                        </Box>
+                      </TableCell>
+                      <TableCell
+                        sx={{ fontWeight: 700, cursor: 'pointer', userSelect: 'none' }}
+                        onClick={() => handleSortClick('status')}
+                      >
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          Status
+                          {sortBy === 'status' && (sortDirection === 'asc' ? <ArrowUpIcon sx={{ fontSize: 16 }} /> : <ArrowDownIcon sx={{ fontSize: 16 }} />)}
+                        </Box>
+                      </TableCell>
+                      <TableCell
+                        sx={{ fontWeight: 700, cursor: 'pointer', userSelect: 'none' }}
+                        onClick={() => handleSortClick('priority')}
+                      >
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          Priority
+                          {sortBy === 'priority' && (sortDirection === 'asc' ? <ArrowUpIcon sx={{ fontSize: 16 }} /> : <ArrowDownIcon sx={{ fontSize: 16 }} />)}
+                        </Box>
+                      </TableCell>
+                      <TableCell
+                        sx={{ fontWeight: 700, textAlign: 'right', cursor: 'pointer', userSelect: 'none' }}
+                        onClick={() => handleSortClick('due_date')}
+                      >
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, justifyContent: 'flex-end' }}>
+                          Due Date
+                          {sortBy === 'due_date' && (sortDirection === 'asc' ? <ArrowUpIcon sx={{ fontSize: 16 }} /> : <ArrowDownIcon sx={{ fontSize: 16 }} />)}
+                        </Box>
+                      </TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {vendorTasks.map(task => (
+                    {sortedTasks.map(task => (
                       <TableRow key={task.id} sx={{ '&:hover': { bgcolor: '#f0f0f0' } }}>
                         <TableCell sx={{ fontSize: '0.9rem', maxWidth: 250 }}>
                           <Typography sx={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -258,9 +346,11 @@ const VendorDetailModal = ({ open, vendor, onClose, onEdit }) => {
       </DialogContent>
 
       <DialogActions sx={{ pt: 2, borderTop: '1px solid #e0e0e0' }}>
-        <Button onClick={onClose}>Close</Button>
         <Button onClick={() => { onClose(); onEdit?.(); }} variant="contained" color="primary">
           Edit
+        </Button>
+        <Button onClick={onClose}>
+          Close
         </Button>
       </DialogActions>
     </Dialog>
