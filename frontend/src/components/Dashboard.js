@@ -39,60 +39,11 @@ import PageHeader from './Layout/PageHeader';
 import TaskCalendar from './TaskCalendar';
 import TaskDetailModal from './TaskDetailModal';
 import VendorDetailModal from './VendorDetailModal';
-
-const StatCard = ({ title, value, subtitle, icon: Icon, color, bgcolor, borderColor, onClick }) => {
-  return (
-    <Card sx={{ 
-      height: '100%',
-      minHeight: 140,
-      borderTop: `3px solid ${color}`,
-      display: 'flex',
-      flexDirection: 'column',
-      cursor: 'pointer',
-      transition: 'all 0.2s ease',
-      '&:hover': {
-        boxShadow: 3,
-        transform: 'translateY(-4px)',
-      },
-    }}
-    onClick={onClick}>
-      <CardContent sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1 }}>
-        <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 2 }}>
-          <Box>
-            <Typography color="textSecondary" variant="body2" sx={{ fontWeight: 500 }}>
-              {title}
-            </Typography>
-            <Typography variant="h3" sx={{ fontWeight: 700, mt: 1 }}>
-              {value}
-            </Typography>
-            {subtitle && (
-              <Typography variant="caption" sx={{ color, fontWeight: 500, mt: 1, display: 'block' }}>
-                {subtitle}
-              </Typography>
-            )}
-          </Box>
-        </Box>
-      </CardContent>
-    </Card>
-  );
-};
+import StatisticsCards from './shared/StatisticsCards';
 
 const Dashboard = () => {
   const theme = useTheme();
   
-  // Format number with dots as thousand separators (Icelandic format)
-  const formatPrice = (num) => {
-    return Math.floor(num).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-  };
-  
-  const [stats, setStats] = useState({
-    openWorkOrders: 0,
-    overdueTasks: 0,
-    upcomingMaintenance: 0,
-    possibleRefund: 0,
-    totalInvestmentThisYear: 0,
-    totalEstimatedCost: 0,
-  });
   const [properties, setProperties] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [vendors, setVendors] = useState([]);
@@ -118,59 +69,13 @@ const Dashboard = () => {
         axios.get('/api/vendors/'),
       ]);
 
-      const tasks = Array.isArray(tasksResponse.data) ? tasksResponse.data : [];
-      const properties = Array.isArray(propertiesResponse.data) ? propertiesResponse.data : [];
-      const vendors = Array.isArray(vendorsResponse.data) ? vendorsResponse.data : [];
+      const fetchedTasks = Array.isArray(tasksResponse.data) ? tasksResponse.data : [];
+      const fetchedProperties = Array.isArray(propertiesResponse.data) ? propertiesResponse.data : [];
+      const fetchedVendors = Array.isArray(vendorsResponse.data) ? vendorsResponse.data : [];
 
-      // Calculate stats
-      const openWorkOrders = tasks.filter(t => t.status !== 'finished').length;
-      const overdueTasks = tasks.filter(t => t.status !== 'finished' && t.created_date).length; // Simplified for now
-      
-      // Calculate possible VAT refund (35% of work price for finished tasks not yet claimed)
-      const finishedTasks = tasks.filter(
-        t => t.status === 'finished' && !t.vat_refund_claimed
-      );
-      const totalVatRefundablePrice = finishedTasks.reduce((sum, t) => {
-        // Calculate from price_breakdown if available
-        if (t.price_breakdown && t.price_breakdown.length > 0) {
-          const vatRefundable = t.price_breakdown
-            .filter(item => item.vat_refundable)
-            .reduce((itemSum, item) => itemSum + (parseFloat(item.amount) || 0), 0);
-          return sum + vatRefundable;
-        }
-        // Fall back to final_work_price for backward compatibility
-        return sum + (parseFloat(t.final_work_price) || 0);
-      }, 0);
-      const possibleRefund = Math.floor(totalVatRefundablePrice * 0.24 * 0.35);
-
-      // Calculate total investment this year (sum of final_price for tasks created this year)
-      const currentYear = new Date().getFullYear();
-      const tasksThisYear = tasks.filter(t => {
-        if (!t.created_date) return false;
-        const taskYear = new Date(t.created_date).getFullYear();
-        return taskYear === currentYear;
-      });
-      const totalInvestmentThisYear = tasksThisYear.reduce((sum, t) => {
-        return sum + (parseFloat(t.final_price) || 0);
-      }, 0);
-
-      // Calculate total estimated cost for all tasks this year
-      const totalEstimatedCost = tasksThisYear.reduce((sum, t) => {
-        return sum + (parseFloat(t.estimated_price) || 0);
-      }, 0);
-
-      setTasks(tasks.slice(0, 10));
-      setProperties(properties.slice(0, 3));
-      setVendors(vendors.slice(0, 5));
-      
-      setStats({
-        openWorkOrders,
-        overdueTasks: Math.floor(openWorkOrders * 0.3), // Placeholder calculation
-        upcomingMaintenance: Math.floor(openWorkOrders * 0.5), // Placeholder calculation
-        possibleRefund,
-        totalInvestmentThisYear,
-        totalEstimatedCost,
-      });
+      setTasks(fetchedTasks.slice(0, 10));
+      setProperties(fetchedProperties.slice(0, 3));
+      setVendors(fetchedVendors.slice(0, 5));
     } catch (err) {
       setError('Failed to load dashboard data');
       console.error(err);
@@ -187,56 +92,6 @@ const Dashboard = () => {
     );
   }
 
-  const statisticsCards = [
-    {
-      title: 'Open Work Orders',
-      value: stats.openWorkOrders,
-      subtitle: `${stats.overdueTasks} Overdue`,
-      icon: WorkIcon,
-      color: '#2196f3',
-      onClick: () => {
-        setSelectedStatsCategory('openWorkOrders');
-        setStatsModalOpen(true);
-      },
-    },
-    // {
-    //   title: 'Upcoming Maintenance',
-    //   value: stats.upcomingMaintenance,
-    //   subtitle: 'This Week',
-    //   icon: MaintenanceIcon,
-    //   color: '#4caf50',
-    //   onClick: () => {
-    //     setSelectedStatsCategory('upcomingMaintenance');
-    //     setStatsModalOpen(true);
-    //   },
-    // },
-    {
-      title: 'Possible VAT Refund',
-      value: `${formatPrice(stats.possibleRefund)} Kr.`,
-      subtitle: '35% of VAT (24%)',
-      icon: RefundIcon,
-      color: '#4caf50',
-      onClick: () => {
-        setSelectedStatsCategory('possibleRefund');
-        setStatsModalOpen(true);
-      },
-    },
-    {
-      title: 'Total Investment This Year',
-      value: `${formatPrice(stats.totalInvestmentThisYear)} Kr.`,
-      subtitle: 'Based on final prices',
-      icon: WorkIcon,
-      color: '#2196f3',
-    },
-    {
-      title: 'Total Estimated Cost',
-      value: `${formatPrice(stats.totalEstimatedCost)} Kr.`,
-      subtitle: "This year's tasks",
-      icon: WorkIcon,
-      color: '#ff9800',
-    },
-  ];
-
   return (
     <Box>
       <PageHeader
@@ -248,20 +103,7 @@ const Dashboard = () => {
       {error && <Alert severity="error" sx={{ mb: 4 }}>{error}</Alert>}
 
       {/* Statistics Cards */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
-        {statisticsCards.map((card, index) => (
-          <Grid item xs={12} sm={6} md={3} key={index}>
-            <StatCard
-              title={card.title}
-              value={card.value}
-              subtitle={card.subtitle}
-              icon={card.icon}
-              color={card.color}
-              onClick={card.onClick}
-            />
-          </Grid>
-        ))}
-      </Grid>
+      {tasks.length > 0 && <StatisticsCards tasks={tasks} yearFilter="all" />}
 
       {/* Main Content Grid */}
       <Grid container spacing={3} sx={{ mb: 4 }}>

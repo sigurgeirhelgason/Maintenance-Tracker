@@ -38,6 +38,7 @@ import DetailPanel from './shared/DetailPanel';
 import DetailField from './shared/DetailField';
 import ConfirmDialog from './shared/ConfirmDialog';
 import NotificationSnackbar from './shared/NotificationSnackbar';
+import StatisticsCards from './shared/StatisticsCards';
 import { useNotification, useConfirmDialog } from './shared/hooks';
 
 // Format number with dot thousand separators (e.g., 200000 -> "200.000")
@@ -609,6 +610,9 @@ const Tasks = () => {
       />
 
       {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
+
+      {/* Statistics Cards */}
+      {tasks.length > 0 && <StatisticsCards tasks={tasks} yearFilter="all" />}
 
       {properties.length === 0 ? (
         <Card>

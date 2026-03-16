@@ -48,6 +48,7 @@ import {
   Cell,
 } from 'recharts';
 import PageHeader from './Layout/PageHeader';
+import StatisticsCards, { StatCard } from './shared/StatisticsCards';
 
 const Reports = () => {
   const { reportType } = useParams();
@@ -169,17 +170,30 @@ const Reports = () => {
       const cost = task.final_price || task.estimated_price || 0;
       
       if (!data[typeName]) {
-        data[typeName] = { total: 0, count: 0 };
+        data[typeName] = { actual: 0, estimated: 0, count: 0, finishedCount: 0 };
       }
-      data[typeName].total += cost;
+      if (task.final_price) {
+        data[typeName].actual += task.final_price;
+        if (task.status === 'finished') {
+          data[typeName].finishedCount += 1;
+        }
+      } else {
+        data[typeName].estimated += task.estimated_price || 0;
+      }
       data[typeName].count += 1;
     });
-    return Object.entries(data).map(([name, values]) => ({
-      type: name,
-      total: values.total,
-      count: values.count,
-      average: Math.round(values.total / values.count),
-    })).sort((a, b) => b.total - a.total);
+    return Object.entries(data).map(([name, values]) => {
+      const totalCost = values.actual + values.estimated;
+      return {
+        type: name,
+        actual: values.actual,
+        estimated: values.estimated,
+        total: totalCost,
+        count: values.count,
+        finishedCount: values.finishedCount,
+        average: values.finishedCount > 0 ? Math.round(values.actual / values.finishedCount) : 0,
+      };
+    }).sort((a, b) => b.total - a.total);
   }, [filteredTasks]);
 
   // Vendor Performance
@@ -232,30 +246,67 @@ const Reports = () => {
   // Monthly Cost Analysis
   const monthlyCosts = useMemo(() => {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const monthlyData = months.map((month, index) => ({
-      month,
-      cost: 0,
-      count: 0,
-    }));
-
-    // For monthly view, use the current/latest year if "all" is selected
-    let targetYear = yearFilter === 'all' ? new Date().getFullYear() : parseInt(yearFilter);
-
-    tasks.forEach(task => {
-      if (!task.due_date) return;
+    
+    if (yearFilter === 'all') {
+      // Get all year-month combinations from tasks
+      const yearMonthMap = new Map();
       
-      const taskDate = new Date(task.due_date);
-      const taskYear = taskDate.getFullYear();
-      const taskMonth = taskDate.getMonth();
-
-      if (taskYear === targetYear) {
+      tasks.forEach(task => {
+        if (!task.due_date) return;
+        const taskDate = new Date(task.due_date);
+        const year = taskDate.getFullYear();
+        const month = taskDate.getMonth();
+        const key = `${year}-${month}`;
+        
+        if (!yearMonthMap.has(key)) {
+          yearMonthMap.set(key, {
+            year,
+            month,
+            monthName: months[month],
+            cost: 0,
+            count: 0,
+          });
+        }
+        
+        const data = yearMonthMap.get(key);
         const cost = task.final_price || task.estimated_price || 0;
-        monthlyData[taskMonth].cost += cost;
-        monthlyData[taskMonth].count += 1;
-      }
-    });
+        data.cost += cost;
+        data.count += 1;
+      });
+      
+      // Sort by year and month, create labels with year
+      return Array.from(yearMonthMap.values())
+        .sort((a, b) => a.year - b.year || a.month - b.month)
+        .map(item => ({
+          month: `${item.monthName} ${item.year}`,
+          cost: item.cost,
+          count: item.count,
+        }));
+    } else {
+      // Single year view
+      const monthlyData = months.map((month, index) => ({
+        month,
+        cost: 0,
+        count: 0,
+      }));
 
-    return monthlyData;
+      const targetYear = parseInt(yearFilter);
+      tasks.forEach(task => {
+        if (!task.due_date) return;
+        
+        const taskDate = new Date(task.due_date);
+        const taskYear = taskDate.getFullYear();
+        const taskMonth = taskDate.getMonth();
+
+        if (taskYear === targetYear) {
+          const cost = task.final_price || task.estimated_price || 0;
+          monthlyData[taskMonth].cost += cost;
+          monthlyData[taskMonth].count += 1;
+        }
+      });
+
+      return monthlyData;
+    }
   }, [tasks, yearFilter]);
 
   // Get tasks for selected month (only finished tasks)
@@ -535,47 +586,8 @@ const Reports = () => {
               </CardContent>
             </Card>
 
-            {/* Financial Summary Cards */}
-            <Grid container spacing={2} sx={{ mb: 3 }}>
-              <Grid item xs={12} sm={4}>
-                <Card sx={{ backgroundColor: 'rgba(21, 101, 192, 0.1)', borderLeft: '4px solid #1565C0' }}>
-                  <CardContent sx={{ textAlign: 'center' }}>
-                    <Typography color="textSecondary" variant="body2" sx={{ fontWeight: 500 }}>
-                      Total Spent
-                    </Typography>
-                    <Typography variant="h4" sx={{ fontWeight: 700, color: '#1565C0', my: 1 }}>
-                      {costByProperty.reduce((sum, p) => sum + p.actual, 0).toLocaleString('is-IS')}
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Grid>
-              <Grid item xs={12} sm={4}>
-                <Card sx={{ backgroundColor: 'rgba(46, 125, 50, 0.1)', borderLeft: '4px solid #2E7D32' }}>
-                  <CardContent sx={{ textAlign: 'center' }}>
-                    <Typography color="textSecondary" variant="body2" sx={{ fontWeight: 500 }}>
-                      Total Tasks
-                    </Typography>
-                    <Typography variant="h4" sx={{ fontWeight: 700, color: '#2E7D32', my: 1 }}>
-                      {tasks.length}
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Grid>
-              <Grid item xs={12} sm={4}>
-                <Card sx={{ backgroundColor: 'rgba(245, 124, 0, 0.1)', borderLeft: '4px solid #F57C00' }}>
-                  <CardContent sx={{ textAlign: 'center' }}>
-                    <Typography color="textSecondary" variant="body2" sx={{ fontWeight: 500 }}>
-                      Average Cost
-                    </Typography>
-                    <Typography variant="h4" sx={{ fontWeight: 700, color: '#F57C00', my: 1 }}>
-                      {tasks.length > 0 
-                        ? Math.round(costByProperty.reduce((sum, p) => sum + p.actual, 0) / tasks.length).toLocaleString('is-IS')
-                        : 0}
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Grid>
-            </Grid>
+            {/* Statistics Cards */}
+            <StatisticsCards tasks={filteredTasks} yearFilter={yearFilter} />
 
             {/* Charts */}
             <Grid container spacing={2}>
@@ -615,7 +627,9 @@ const Reports = () => {
                         <XAxis dataKey="type" angle={-45} textAnchor="end" height={80} />
                         <YAxis />
                         <Tooltip formatter={(value) => value.toLocaleString('is-IS')} />
-                        <Bar dataKey="total" fill="#1565C0" name="Total Cost" />
+                        <Legend />
+                        <Bar dataKey="actual" fill="#4CAF50" name="Actual Cost" />
+                        <Bar dataKey="estimated" fill="#FFC107" name="Estimated Cost" />
                       </BarChart>
                     </ResponsiveContainer>
                   </CardContent>
@@ -662,9 +676,11 @@ const Reports = () => {
                         <TableHead sx={{ backgroundColor: '#f5f5f5' }}>
                           <TableRow>
                             <TableCell sx={{ fontWeight: 700 }}>Task Type</TableCell>
-                            <TableCell align="right" sx={{ fontWeight: 700 }}>Count</TableCell>
-                            <TableCell align="right" sx={{ fontWeight: 700 }}>Total</TableCell>
-                            <TableCell align="right" sx={{ fontWeight: 700 }}>Average</TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 700 }}>Total Tasks</TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 700 }}>Finished</TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 700 }}>Actual Cost</TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 700 }}>Estimated</TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 700 }}>Avg (Finished)</TableCell>
                           </TableRow>
                         </TableHead>
                         <TableBody>
@@ -672,7 +688,9 @@ const Reports = () => {
                             <TableRow key={row.type}>
                               <TableCell>{row.type}</TableCell>
                               <TableCell align="right">{row.count}</TableCell>
-                              <TableCell align="right" sx={{ fontWeight: 600 }}>{row.total.toLocaleString('is-IS')}</TableCell>
+                              <TableCell align="right" sx={{ color: '#4CAF50', fontWeight: 600 }}>{row.finishedCount}</TableCell>
+                              <TableCell align="right" sx={{ fontWeight: 600, color: '#4CAF50' }}>{row.actual.toLocaleString('is-IS')}</TableCell>
+                              <TableCell align="right" sx={{ fontWeight: 600, color: '#FFC107' }}>{row.estimated.toLocaleString('is-IS')}</TableCell>
                               <TableCell align="right">{row.average.toLocaleString('is-IS')}</TableCell>
                             </TableRow>
                           ))}
@@ -715,43 +733,42 @@ const Reports = () => {
             </Card>
 
             <Grid container spacing={2} sx={{ mb: 3 }}>
-              <Grid item xs={12} sm={4}>
-                <Card sx={{ backgroundColor: 'rgba(255, 193, 7, 0.1)', borderLeft: '4px solid #FFC107' }}>
-                  <CardContent sx={{ textAlign: 'center' }}>
-                    <Typography color="textSecondary" variant="body2" sx={{ fontWeight: 500 }}>
-                      Pending
-                    </Typography>
-                    <Typography variant="h3" sx={{ fontWeight: 700, color: '#FFC107', my: 1 }}>
-                      {taskStatusOverview.pending}
-                    </Typography>
-                  </CardContent>
-                </Card>
+              <Grid item xs={12} sm={6} md={3}>
+                <StatCard
+                  title="Pending"
+                  value={taskStatusOverview.pending}
+                  subtitle="Not started"
+                  color="#FFC107"
+                />
               </Grid>
 
-              <Grid item xs={12} sm={4}>
-                <Card sx={{ backgroundColor: 'rgba(33, 150, 243, 0.1)', borderLeft: '4px solid #2196F3' }}>
-                  <CardContent sx={{ textAlign: 'center' }}>
-                    <Typography color="textSecondary" variant="body2" sx={{ fontWeight: 500 }}>
-                      In Progress
-                    </Typography>
-                    <Typography variant="h3" sx={{ fontWeight: 700, color: '#2196F3', my: 1 }}>
-                      {taskStatusOverview.in_progress}
-                    </Typography>
-                  </CardContent>
-                </Card>
+              <Grid item xs={12} sm={6} md={3}>
+                <StatCard
+                  title="In Progress"
+                  value={taskStatusOverview.in_progress}
+                  subtitle="Currently working"
+                  color="#2196F3"
+                />
               </Grid>
 
-              <Grid item xs={12} sm={4}>
-                <Card sx={{ backgroundColor: 'rgba(46, 125, 50, 0.1)', borderLeft: '4px solid #2E7D32' }}>
-                  <CardContent sx={{ textAlign: 'center' }}>
-                    <Typography color="textSecondary" variant="body2" sx={{ fontWeight: 500 }}>
-                      Completed
-                    </Typography>
-                    <Typography variant="h3" sx={{ fontWeight: 700, color: '#2E7D32', my: 1 }}>
-                      {taskStatusOverview.finished}
-                    </Typography>
-                  </CardContent>
-                </Card>
+              <Grid item xs={12} sm={6} md={3}>
+                <StatCard
+                  title="Completed"
+                  value={taskStatusOverview.finished}
+                  subtitle="Finished tasks"
+                  color="#2E7D32"
+                />
+              </Grid>
+
+              <Grid item xs={12} sm={6} md={3}>
+                <StatCard
+                  title="Completion Rate"
+                  value={tasks.length > 0 
+                    ? Math.round((taskStatusOverview.finished / tasks.length) * 100) + '%'
+                    : '0%'}
+                  subtitle="Of all tasks"
+                  color="#FF5722"
+                />
               </Grid>
             </Grid>
 
@@ -867,48 +884,45 @@ const Reports = () => {
             </Card>
 
             <Grid container spacing={2} sx={{ mb: 3 }}>
-              <Grid item xs={12} sm={4}>
-                <Card sx={{ backgroundColor: 'rgba(156, 39, 176, 0.1)', borderLeft: '4px solid #9C27B0' }}>
-                  <CardContent sx={{ textAlign: 'center' }}>
-                    <Typography color="textSecondary" variant="body2" sx={{ fontWeight: 500 }}>
-                      Total Vendors
-                    </Typography>
-                    <Typography variant="h3" sx={{ fontWeight: 700, color: '#9C27B0', my: 1 }}>
-                      {vendorPerformance.length}
-                    </Typography>
-                  </CardContent>
-                </Card>
+              <Grid item xs={12} sm={6} md={3}>
+                <StatCard
+                  title="Total Vendors"
+                  value={vendorPerformance.length}
+                  subtitle="In database"
+                  color="#9C27B0"
+                />
               </Grid>
 
-              <Grid item xs={12} sm={4}>
-                <Card sx={{ backgroundColor: 'rgba(33, 150, 243, 0.1)', borderLeft: '4px solid #2196F3' }}>
-                  <CardContent sx={{ textAlign: 'center' }}>
-                    <Typography color="textSecondary" variant="body2" sx={{ fontWeight: 500 }}>
-                      Tasks Completed
-                    </Typography>
-                    <Typography variant="h3" sx={{ fontWeight: 700, color: '#2196F3', my: 1 }}>
-                      {Math.round(vendorPerformance.reduce((sum, v) => sum + (v.completed || 0), 0))}
-                    </Typography>
-                  </CardContent>
-                </Card>
+              <Grid item xs={12} sm={6} md={3}>
+                <StatCard
+                  title="Tasks Completed"
+                  value={Math.round(vendorPerformance.reduce((sum, v) => sum + (v.completed || 0), 0))}
+                  subtitle="By all vendors"
+                  color="#2196F3"
+                />
               </Grid>
 
-              <Grid item xs={12} sm={4}>
-                <Card sx={{ backgroundColor: 'rgba(46, 125, 50, 0.1)', borderLeft: '4px solid #2E7D32' }}>
-                  <CardContent sx={{ textAlign: 'center' }}>
-                    <Typography color="textSecondary" variant="body2" sx={{ fontWeight: 500 }}>
-                      Avg Completion Rate
-                    </Typography>
-                    <Typography variant="h3" sx={{ fontWeight: 700, color: '#2E7D32', my: 1 }}>
-                      {vendorPerformance.length > 0
-                        ? Math.round(
-                            vendorPerformance.reduce((sum, v) => sum + (v.completionRate || 0), 0) /
-                              vendorPerformance.length
-                          )
-                        : 0}%
-                    </Typography>
-                  </CardContent>
-                </Card>
+              <Grid item xs={12} sm={6} md={3}>
+                <StatCard
+                  title="Avg Completion Rate"
+                  value={vendorPerformance.length > 0
+                    ? Math.round(
+                        vendorPerformance.reduce((sum, v) => sum + (v.completionRate || 0), 0) /
+                          vendorPerformance.length
+                      ) + '%'
+                    : '0%'}
+                  subtitle="Vendor average"
+                  color="#2E7D32"
+                />
+              </Grid>
+
+              <Grid item xs={12} sm={6} md={3}>
+                <StatCard
+                  title="Favorite Vendors"
+                  value={vendorPerformance.filter(v => v.is_favorite).length}
+                  subtitle="Marked as favorite"
+                  color="#FF5722"
+                />
               </Grid>
             </Grid>
 
@@ -1042,42 +1056,27 @@ const Reports = () => {
 
             <Grid container spacing={2} sx={{ mb: 3 }}>
               <Grid item xs={12} sm={4}>
-                <Card sx={{ backgroundColor: 'rgba(21, 101, 192, 0.1)', borderLeft: '4px solid #1565C0' }}>
-                  <CardContent sx={{ textAlign: 'center' }}>
-                    <Typography color="textSecondary" variant="body2" sx={{ fontWeight: 500 }}>
-                      Completed Maintenance Tasks
-                    </Typography>
-                    <Typography variant="h3" sx={{ fontWeight: 700, color: '#1565C0', my: 1 }}>
-                      {maintenanceHistory.length}
-                    </Typography>
-                  </CardContent>
-                </Card>
+                <StatCard 
+                  title="Completed Maintenance Tasks"
+                  value={maintenanceHistory.length}
+                  color="#1565C0"
+                />
               </Grid>
 
               <Grid item xs={12} sm={4}>
-                <Card sx={{ backgroundColor: 'rgba(76, 175, 80, 0.1)', borderLeft: '4px solid #4CAF50' }}>
-                  <CardContent sx={{ textAlign: 'center' }}>
-                    <Typography color="textSecondary" variant="body2" sx={{ fontWeight: 500 }}>
-                      Total Spent
-                    </Typography>
-                    <Typography variant="h4" sx={{ fontWeight: 700, color: '#4CAF50', my: 1 }}>
-                      {(maintenanceHistory.reduce((sum, t) => sum + (t.final_price || 0), 0)).toLocaleString('is-IS', { maximumFractionDigits: 0 })} kr
-                    </Typography>
-                  </CardContent>
-                </Card>
+                <StatCard 
+                  title="Total Spent"
+                  value={`${(maintenanceHistory.reduce((sum, t) => sum + (t.final_price || 0), 0)).toLocaleString('is-IS', { maximumFractionDigits: 0 })} kr`}
+                  color="#4CAF50"
+                />
               </Grid>
 
               <Grid item xs={12} sm={4}>
-                <Card sx={{ backgroundColor: 'rgba(255, 152, 0, 0.1)', borderLeft: '4px solid #FF9800' }}>
-                  <CardContent sx={{ textAlign: 'center' }}>
-                    <Typography color="textSecondary" variant="body2" sx={{ fontWeight: 500 }}>
-                      Properties Maintained
-                    </Typography>
-                    <Typography variant="h3" sx={{ fontWeight: 700, color: '#FF9800', my: 1 }}>
-                      {new Set(filteredTasks.map(t => t.property)).size}
-                    </Typography>
-                  </CardContent>
-                </Card>
+                <StatCard 
+                  title="Properties Maintained"
+                  value={new Set(filteredTasks.map(t => t.property)).size}
+                  color="#FF9800"
+                />
               </Grid>
             </Grid>
 
@@ -1127,7 +1126,7 @@ const Reports = () => {
                   <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                     <Typography variant="body2" color="textSecondary">Select Year:</Typography>
                     <select
-                      value={yearFilter === 'all' ? new Date().getFullYear() : yearFilter}
+                      value={yearFilter}
                       onChange={(e) => setYearFilter(e.target.value)}
                       style={{
                         padding: '6px 8px',
@@ -1138,6 +1137,7 @@ const Reports = () => {
                         cursor: 'pointer',
                       }}
                     >
+                      <option value="all">All Years</option>
                       {availableYears.map(year => (
                         <option key={year} value={year}>{year}</option>
                       ))}
@@ -1176,7 +1176,7 @@ const Reports = () => {
                   </ResponsiveContainer>
                 ) : (
                   <Typography color="textSecondary" sx={{ textAlign: 'center', mt: 10 }}>
-                    No data available for {yearFilter === 'all' ? new Date().getFullYear() : yearFilter}
+                    No data available for {yearFilter === 'all' ? 'all years' : yearFilter}
                   </Typography>
                 )}
               </CardContent>
@@ -1286,42 +1286,27 @@ const Reports = () => {
             {/* Metric Cards */}
             <Grid container spacing={2}>
               <Grid item xs={12} sm={6} md={4}>
-                <Card>
-                  <CardContent>
-                    <Typography color="textSecondary" gutterBottom>
-                      Areas Needing Attention
-                    </Typography>
-                    <Typography variant="h4" sx={{ fontWeight: 700, color: '#D32F2F' }}>
-                      {areaMaintenanceData.filter(a => a.open > 0).length}
-                    </Typography>
-                  </CardContent>
-                </Card>
+                <StatCard 
+                  title="Areas Needing Attention"
+                  value={areaMaintenanceData.filter(a => a.open > 0).length}
+                  color="#D32F2F"
+                />
               </Grid>
 
               <Grid item xs={12} sm={6} md={4}>
-                <Card>
-                  <CardContent>
-                    <Typography color="textSecondary" gutterBottom>
-                      Open Tasks
-                    </Typography>
-                    <Typography variant="h4" sx={{ fontWeight: 700, color: '#FF9800' }}>
-                      {areaMaintenanceData.reduce((sum, a) => sum + a.open, 0)}
-                    </Typography>
-                  </CardContent>
-                </Card>
+                <StatCard 
+                  title="Open Tasks"
+                  value={areaMaintenanceData.reduce((sum, a) => sum + a.open, 0)}
+                  color="#FF9800"
+                />
               </Grid>
 
               <Grid item xs={12} sm={6} md={4}>
-                <Card>
-                  <CardContent>
-                    <Typography color="textSecondary" gutterBottom>
-                      Completed in Areas
-                    </Typography>
-                    <Typography variant="h4" sx={{ fontWeight: 700, color: '#4CAF50' }}>
-                      {areaMaintenanceData.reduce((sum, a) => sum + a.finished, 0)}
-                    </Typography>
-                  </CardContent>
-                </Card>
+                <StatCard 
+                  title="Completed in Areas"
+                  value={areaMaintenanceData.reduce((sum, a) => sum + a.finished, 0)}
+                  color="#4CAF50"
+                />
               </Grid>
             </Grid>
 
@@ -1419,55 +1404,35 @@ const Reports = () => {
             {/* Status Cards */}
             <Grid container spacing={2}>
               <Grid item xs={12} sm={6} md={3}>
-                <Card>
-                  <CardContent>
-                    <Typography color="textSecondary" gutterBottom>
-                      Pending
-                    </Typography>
-                    <Typography variant="h4" sx={{ fontWeight: 700, color: '#FFC107' }}>
-                      {upcomingMaintenanceSchedule.filter(t => t.status === 'pending').length}
-                    </Typography>
-                  </CardContent>
-                </Card>
+                <StatCard 
+                  title="Pending"
+                  value={upcomingMaintenanceSchedule.filter(t => t.status === 'pending').length}
+                  color="#FFC107"
+                />
               </Grid>
 
               <Grid item xs={12} sm={6} md={3}>
-                <Card>
-                  <CardContent>
-                    <Typography color="textSecondary" gutterBottom>
-                      In Progress
-                    </Typography>
-                    <Typography variant="h4" sx={{ fontWeight: 700, color: '#2196F3' }}>
-                      {upcomingMaintenanceSchedule.filter(t => t.status === 'in_progress').length}
-                    </Typography>
-                  </CardContent>
-                </Card>
+                <StatCard 
+                  title="In Progress"
+                  value={upcomingMaintenanceSchedule.filter(t => t.status === 'in_progress').length}
+                  color="#2196F3"
+                />
               </Grid>
 
               <Grid item xs={12} sm={6} md={3}>
-                <Card>
-                  <CardContent>
-                    <Typography color="textSecondary" gutterBottom>
-                      Due Within 7 Days
-                    </Typography>
-                    <Typography variant="h4" sx={{ fontWeight: 700, color: '#D32F2F' }}>
-                      {upcomingMaintenanceSchedule.filter(t => t.daysUntilDue !== null && t.daysUntilDue <= 7 && t.daysUntilDue > 0).length}
-                    </Typography>
-                  </CardContent>
-                </Card>
+                <StatCard 
+                  title="Due Within 7 Days"
+                  value={upcomingMaintenanceSchedule.filter(t => t.daysUntilDue !== null && t.daysUntilDue <= 7 && t.daysUntilDue > 0).length}
+                  color="#D32F2F"
+                />
               </Grid>
 
               <Grid item xs={12} sm={6} md={3}>
-                <Card>
-                  <CardContent>
-                    <Typography color="textSecondary" gutterBottom>
-                      Overdue
-                    </Typography>
-                    <Typography variant="h4" sx={{ fontWeight: 700, color: '#B71C1C' }}>
-                      {upcomingMaintenanceSchedule.filter(t => t.daysUntilDue !== null && t.daysUntilDue <= 0).length}
-                    </Typography>
-                  </CardContent>
-                </Card>
+                <StatCard 
+                  title="Overdue"
+                  value={upcomingMaintenanceSchedule.filter(t => t.daysUntilDue !== null && t.daysUntilDue <= 0).length}
+                  color="#B71C1C"
+                />
               </Grid>
             </Grid>
 
@@ -1588,55 +1553,35 @@ const Reports = () => {
             {/* Status Cards */}
             <Grid container spacing={2}>
               <Grid item xs={12} sm={6} md={3}>
-                <Card>
-                  <CardContent>
-                    <Typography color="textSecondary" gutterBottom>
-                      Refunds Pending
-                    </Typography>
-                    <Typography variant="h4" sx={{ fontWeight: 700, color: '#FF9800' }}>
-                      {refundStatusData.notClaimed}
-                    </Typography>
-                  </CardContent>
-                </Card>
+                <StatCard 
+                  title="Refunds Pending"
+                  value={refundStatusData.notClaimed}
+                  color="#FF9800"
+                />
               </Grid>
 
               <Grid item xs={12} sm={6} md={3}>
-                <Card>
-                  <CardContent>
-                    <Typography color="textSecondary" gutterBottom>
-                      Refunds Claimed
-                    </Typography>
-                    <Typography variant="h4" sx={{ fontWeight: 700, color: '#4CAF50' }}>
-                      {refundStatusData.claimed}
-                    </Typography>
-                  </CardContent>
-                </Card>
+                <StatCard 
+                  title="Refunds Claimed"
+                  value={refundStatusData.claimed}
+                  color="#4CAF50"
+                />
               </Grid>
 
               <Grid item xs={12} sm={6} md={3}>
-                <Card>
-                  <CardContent>
-                    <Typography color="textSecondary" gutterBottom>
-                      Est. Refund Amount
-                    </Typography>
-                    <Typography variant="h4" sx={{ fontWeight: 700, color: '#1976D2' }}>
-                      {refundStatusData.estimatedRefundAmount.toLocaleString('is-IS')} kr
-                    </Typography>
-                  </CardContent>
-                </Card>
+                <StatCard 
+                  title="Est. Refund Amount"
+                  value={`${refundStatusData.estimatedRefundAmount.toLocaleString('is-IS')} kr`}
+                  color="#1976D2"
+                />
               </Grid>
 
               <Grid item xs={12} sm={6} md={3}>
-                <Card>
-                  <CardContent>
-                    <Typography color="textSecondary" gutterBottom>
-                      Total VAT (24%)
-                    </Typography>
-                    <Typography variant="h4" sx={{ fontWeight: 700, color: '#7B1FA2' }}>
-                      {refundStatusData.refundableAmount.toLocaleString('is-IS')} kr
-                    </Typography>
-                  </CardContent>
-                </Card>
+                <StatCard 
+                  title="Total VAT (24%)"
+                  value={`${refundStatusData.refundableAmount.toLocaleString('is-IS')} kr`}
+                  color="#7B1FA2"
+                />
               </Grid>
             </Grid>
 
