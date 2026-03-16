@@ -50,6 +50,12 @@ import {
 import PageHeader from './Layout/PageHeader';
 import StatisticsCards, { StatCard } from './shared/StatisticsCards';
 
+// Format numbers with dots as thousand separators (Icelandic style)
+const formatPrice = (num) => {
+  if (typeof num !== 'number') num = parseFloat(num) || 0;
+  return Math.floor(num).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+};
+
 const Reports = () => {
   const { reportType } = useParams();
   const navigate = useNavigate();
@@ -119,14 +125,22 @@ const Reports = () => {
 
   // Filter tasks by year
   const filteredTasks = useMemo(() => {
+    let filtered;
     if (yearFilter === 'all') {
-      return tasks;
+      filtered = tasks;
+    } else {
+      filtered = tasks.filter(task => {
+        if (!task.due_date) return false;
+        return new Date(task.due_date).getFullYear() === parseInt(yearFilter);
+      });
     }
-    return tasks.filter(task => {
-      if (!task.due_date) return false;
-      return new Date(task.due_date).getFullYear() === parseInt(yearFilter);
-    });
-  }, [tasks, yearFilter]);
+    
+    // Add property name to each task
+    return filtered.map(task => ({
+      ...task,
+      property_name: properties.find(p => p.id === task.property)?.name || `Property ${task.property}`,
+    }));
+  }, [tasks, yearFilter, properties]);
 
   // Cost Analysis by Property
   const costByProperty = useMemo(() => {
@@ -135,13 +149,14 @@ const Reports = () => {
       const propId = task.property;
       const prop = properties.find(p => p.id === propId);
       const propName = prop?.name || `Property ${propId}`;
-      const cost = task.final_price || task.estimated_price || 0;
       
       if (!data[propName]) {
         data[propName] = { actual: 0, estimated: 0, count: 0 };
       }
-      if (task.final_price) {
-        data[propName].actual += task.final_price;
+      
+      // Finished tasks: use only final_price. Unfinished tasks: use only estimated_price
+      if (task.status === 'finished') {
+        data[propName].actual += task.final_price || 0;
       } else {
         data[propName].estimated += task.estimated_price || 0;
       }
@@ -167,16 +182,15 @@ const Reports = () => {
     const data = {};
     filteredTasks.forEach(task => {
       const typeName = task.task_type_details?.name || 'Unknown';
-      const cost = task.final_price || task.estimated_price || 0;
       
       if (!data[typeName]) {
         data[typeName] = { actual: 0, estimated: 0, count: 0, finishedCount: 0 };
       }
-      if (task.final_price) {
-        data[typeName].actual += task.final_price;
-        if (task.status === 'finished') {
-          data[typeName].finishedCount += 1;
-        }
+      
+      // Finished tasks: use only final_price. Unfinished tasks: use only estimated_price
+      if (task.status === 'finished') {
+        data[typeName].actual += task.final_price || 0;
+        data[typeName].finishedCount += 1;
       } else {
         data[typeName].estimated += task.estimated_price || 0;
       }
@@ -207,7 +221,6 @@ const Reports = () => {
       if (!vendor) return; // Skip if vendor doesn't exist
       
       const vendorName = vendor.name;
-      const cost = task.final_price || task.estimated_price || 0;
       
       if (!data[vendorName]) {
         data[vendorName] = { 
@@ -217,11 +230,15 @@ const Reports = () => {
           is_favorite: vendor.favorite || false,
         };
       }
-      data[vendorName].tasks += 1;
-      data[vendorName].total += cost;
+      
+      // Finished tasks: use only final_price. Unfinished tasks: use only estimated_price
       if (task.status === 'finished') {
+        data[vendorName].total += task.final_price || 0;
         data[vendorName].completed += 1;
+      } else {
+        data[vendorName].total += task.estimated_price || 0;
       }
+      data[vendorName].tasks += 1;
     });
     return Object.entries(data).map(([name, values]) => ({
       vendor: name,
@@ -252,7 +269,8 @@ const Reports = () => {
       const yearMonthMap = new Map();
       
       tasks.forEach(task => {
-        if (!task.due_date) return;
+        // Only include finished tasks
+        if (task.status !== 'finished' || !task.due_date) return;
         const taskDate = new Date(task.due_date);
         const year = taskDate.getFullYear();
         const month = taskDate.getMonth();
@@ -269,7 +287,8 @@ const Reports = () => {
         }
         
         const data = yearMonthMap.get(key);
-        const cost = task.final_price || task.estimated_price || 0;
+        // Only use final_price for finished tasks
+        const cost = task.final_price || 0;
         data.cost += cost;
         data.count += 1;
       });
@@ -292,14 +311,16 @@ const Reports = () => {
 
       const targetYear = parseInt(yearFilter);
       tasks.forEach(task => {
-        if (!task.due_date) return;
+        // Only include finished tasks
+        if (task.status !== 'finished' || !task.due_date) return;
         
         const taskDate = new Date(task.due_date);
         const taskYear = taskDate.getFullYear();
         const taskMonth = taskDate.getMonth();
 
         if (taskYear === targetYear) {
-          const cost = task.final_price || task.estimated_price || 0;
+          // Only use final_price for finished tasks
+          const cost = task.final_price || 0;
           monthlyData[taskMonth].cost += cost;
           monthlyData[taskMonth].count += 1;
         }
@@ -314,10 +335,16 @@ const Reports = () => {
     if (!selectedMonth) return [];
     
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const monthIndex = months.indexOf(selectedMonth);
+    // Extract month name from selectedMonth (handles both "Jan" and "Jan 2026" formats)
+    const monthName = selectedMonth.split(' ')[0];
+    const monthIndex = months.indexOf(monthName);
+    if (monthIndex === -1) return [];
     
-    // Use the same logic as monthlyCosts for target year
-    let targetYear = yearFilter === 'all' ? new Date().getFullYear() : parseInt(yearFilter);
+    // Extract year from selectedMonth if it exists, otherwise use yearFilter or current year
+    const parts = selectedMonth.split(' ');
+    let targetYear = yearFilter === 'all' 
+      ? (parts.length > 1 ? parseInt(parts[1]) : new Date().getFullYear())
+      : parseInt(yearFilter);
     
     return tasks
       .filter(task => {
@@ -610,7 +637,7 @@ const Reports = () => {
                             <Cell key={`cell-${index}`} fill={['#1565C0', '#2E7D32', '#F57C00', '#D32F2F', '#7B1FA2', '#C2185B'][index % 6]} />
                           ))}
                         </Pie>
-                        <Tooltip formatter={(value) => value.toLocaleString('is-IS')} />
+                        <Tooltip formatter={(value) => formatPrice(value)} />
                       </PieChart>
                     </ResponsiveContainer>
                   </CardContent>
@@ -626,7 +653,7 @@ const Reports = () => {
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="type" angle={-45} textAnchor="end" height={80} />
                         <YAxis />
-                        <Tooltip formatter={(value) => value.toLocaleString('is-IS')} />
+                        <Tooltip formatter={(value) => formatPrice(value)} />
                         <Legend />
                         <Bar dataKey="actual" fill="#4CAF50" name="Actual Cost" />
                         <Bar dataKey="estimated" fill="#FFC107" name="Estimated Cost" />
@@ -657,7 +684,7 @@ const Reports = () => {
                             <TableRow key={row.property}>
                               <TableCell>{row.property}</TableCell>
                               <TableCell align="right">{row.count}</TableCell>
-                              <TableCell align="right" sx={{ fontWeight: 600 }}>{row.actual.toLocaleString('is-IS')}</TableCell>
+                              <TableCell align="right" sx={{ fontWeight: 600 }}>{formatPrice(row.actual)}</TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
@@ -689,9 +716,9 @@ const Reports = () => {
                               <TableCell>{row.type}</TableCell>
                               <TableCell align="right">{row.count}</TableCell>
                               <TableCell align="right" sx={{ color: '#4CAF50', fontWeight: 600 }}>{row.finishedCount}</TableCell>
-                              <TableCell align="right" sx={{ fontWeight: 600, color: '#4CAF50' }}>{row.actual.toLocaleString('is-IS')}</TableCell>
-                              <TableCell align="right" sx={{ fontWeight: 600, color: '#FFC107' }}>{row.estimated.toLocaleString('is-IS')}</TableCell>
-                              <TableCell align="right">{row.average.toLocaleString('is-IS')}</TableCell>
+                              <TableCell align="right" sx={{ fontWeight: 600, color: '#4CAF50' }}>{formatPrice(row.actual)}</TableCell>
+                              <TableCell align="right" sx={{ fontWeight: 600, color: '#FFC107' }}>{formatPrice(row.estimated)}</TableCell>
+                              <TableCell align="right">{formatPrice(row.average)}</TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
@@ -739,6 +766,13 @@ const Reports = () => {
                   value={taskStatusOverview.pending}
                   subtitle="Not started"
                   color="#FFC107"
+                  modalTitle="Pending Tasks"
+                  modalData={filteredTasks.filter(t => t.status === 'pending')}
+                  modalColumns={[
+                    { field: 'property_name', label: 'Property' },
+                    { field: 'description', label: 'Task', render: (val) => val || '-' },
+                    { field: 'due_date', label: 'Due Date', render: (val) => val ? new Date(val).toLocaleDateString('is-IS') : '-' },
+                  ]}
                 />
               </Grid>
 
@@ -748,6 +782,13 @@ const Reports = () => {
                   value={taskStatusOverview.in_progress}
                   subtitle="Currently working"
                   color="#2196F3"
+                  modalTitle="In Progress Tasks"
+                  modalData={filteredTasks.filter(t => t.status === 'in_progress')}
+                  modalColumns={[
+                    { field: 'property_name', label: 'Property' },
+                    { field: 'description', label: 'Task', render: (val) => val || '-' },
+                    { field: 'due_date', label: 'Due Date', render: (val) => val ? new Date(val).toLocaleDateString('is-IS') : '-' },
+                  ]}
                 />
               </Grid>
 
@@ -757,6 +798,14 @@ const Reports = () => {
                   value={taskStatusOverview.finished}
                   subtitle="Finished tasks"
                   color="#2E7D32"
+                  modalTitle="Completed Tasks"
+                  modalData={filteredTasks.filter(t => t.status === 'finished')}
+                  modalColumns={[
+                    { field: 'property_name', label: 'Property' },
+                    { field: 'description', label: 'Task', render: (val) => val || '-' },
+                    { field: 'due_date', label: 'Completed Date', render: (val) => val ? new Date(val).toLocaleDateString('is-IS') : '-' },
+                    { field: 'final_price', label: 'Cost', align: 'right', render: (val) => val ? formatPrice(val) : '' },
+                  ]}
                 />
               </Grid>
 
@@ -890,6 +939,14 @@ const Reports = () => {
                   value={vendorPerformance.length}
                   subtitle="In database"
                   color="#9C27B0"
+                  modalTitle="Vendor List"
+                  modalData={vendorPerformance}
+                  modalColumns={[
+                    { field: 'vendor', label: 'Vendor Name' },
+                    { field: 'tasks', label: 'Total Tasks', align: 'center' },
+                    { field: 'completed', label: 'Completed', align: 'center' },
+                    { field: 'completionRate', label: 'Rate', align: 'center', render: (val) => val + '%' },
+                  ]}
                 />
               </Grid>
 
@@ -899,6 +956,13 @@ const Reports = () => {
                   value={Math.round(vendorPerformance.reduce((sum, v) => sum + (v.completed || 0), 0))}
                   subtitle="By all vendors"
                   color="#2196F3"
+                  modalTitle="Completed Tasks by Vendor"
+                  modalData={vendorPerformance.filter(v => v.completed > 0)}
+                  modalColumns={[
+                    { field: 'vendor', label: 'Vendor Name' },
+                    { field: 'completed', label: 'Completed Tasks', align: 'center' },
+                    { field: 'total', label: 'Total Value', align: 'right', render: (val) => formatPrice(val) + ' kr' },
+                  ]}
                 />
               </Grid>
 
@@ -913,6 +977,14 @@ const Reports = () => {
                     : '0%'}
                   subtitle="Vendor average"
                   color="#2E7D32"
+                  modalTitle="Vendor Completion Rates"
+                  modalData={vendorPerformance}
+                  modalColumns={[
+                    { field: 'vendor', label: 'Vendor Name' },
+                    { field: 'completionRate', label: 'Completion Rate %', align: 'center' },
+                    { field: 'completed', label: 'Completed', align: 'center' },
+                    { field: 'tasks', label: 'Total', align: 'center' },
+                  ]}
                 />
               </Grid>
 
@@ -922,6 +994,14 @@ const Reports = () => {
                   value={vendorPerformance.filter(v => v.is_favorite).length}
                   subtitle="Marked as favorite"
                   color="#FF5722"
+                  modalTitle="Favorite Vendors"
+                  modalData={vendorPerformance.filter(v => v.is_favorite)}
+                  modalColumns={[
+                    { field: 'vendor', label: 'Vendor Name' },
+                    { field: 'tasks', label: 'Total Tasks', align: 'center' },
+                    { field: 'completed', label: 'Completed', align: 'center' },
+                    { field: 'completionRate', label: 'Rate %', align: 'center' },
+                  ]}
                 />
               </Grid>
             </Grid>
@@ -973,7 +1053,7 @@ const Reports = () => {
                               {vendor.vendor}
                             </Typography>
                             <Typography variant="body2" sx={{ fontWeight: 700, color: '#1565C0' }}>
-                              {vendor.total.toLocaleString('is-IS', { maximumFractionDigits: 0 })} kr
+                              {formatPrice(vendor.total)} kr
                             </Typography>
                           </Box>
                           <Box sx={{ width: '100%', height: 8, bgcolor: '#f0f0f0', borderRadius: 1, overflow: 'hidden' }}>
@@ -1010,7 +1090,7 @@ const Reports = () => {
                       <TableRow key={index}>
                         <TableCell>{vendor.vendor}</TableCell>
                         <TableCell align="right">
-                          {vendor.total.toLocaleString('is-IS', { maximumFractionDigits: 0 })} kr
+                          {formatPrice(vendor.total)} kr
                         </TableCell>
                         <TableCell align="right">{vendor.tasks}</TableCell>
                         <TableCell align="right">{vendor.completed}</TableCell>
@@ -1060,14 +1140,30 @@ const Reports = () => {
                   title="Completed Maintenance Tasks"
                   value={maintenanceHistory.length}
                   color="#1565C0"
+                  modalTitle="Completed Maintenance Tasks"
+                  modalData={maintenanceHistory}
+                  modalColumns={[
+                    { field: 'property_name', label: 'Property' },
+                    { field: 'description', label: 'Task', render: (val) => val || '-' },
+                    { field: 'due_date', label: 'Completed Date', render: (val) => val ? new Date(val).toLocaleDateString('is-IS') : '-' },
+                    { field: 'final_price', label: 'Cost', align: 'right', render: (val) => val ? formatPrice(val) + ' kr' : '' },
+                  ]}
                 />
               </Grid>
 
               <Grid item xs={12} sm={4}>
                 <StatCard 
                   title="Total Spent"
-                  value={`${(maintenanceHistory.reduce((sum, t) => sum + (t.final_price || 0), 0)).toLocaleString('is-IS', { maximumFractionDigits: 0 })} kr`}
+                  value={`${formatPrice(maintenanceHistory.reduce((sum, t) => sum + (t.final_price || 0), 0))} kr`}
                   color="#4CAF50"
+                  modalTitle="Cost Breakdown"
+                  modalData={maintenanceHistory.filter(t => t.final_price > 0)}
+                  modalColumns={[
+                    { field: 'property_name', label: 'Property' },
+                    { field: 'description', label: 'Task', render: (val) => val || '-' },
+                    { field: 'due_date', label: 'Date', render: (val) => val ? new Date(val).toLocaleDateString('is-IS') : '-' },
+                    { field: 'final_price', label: 'Cost', align: 'right', render: (val) => formatPrice(val) + ' kr' },
+                  ]}
                 />
               </Grid>
 
@@ -1076,6 +1172,13 @@ const Reports = () => {
                   title="Properties Maintained"
                   value={new Set(filteredTasks.map(t => t.property)).size}
                   color="#FF9800"
+                  modalTitle="Properties with Maintenance"
+                  modalData={Array.from(new Map(maintenanceHistory.map(t => [t.property, { property_name: t.property_name, property: t.property, count: maintenanceHistory.filter(m => m.property === t.property).length, total: maintenanceHistory.filter(m => m.property === t.property).reduce((sum, m) => sum + (m.final_price || 0), 0) }])).values())}
+                  modalColumns={[
+                    { field: 'property_name', label: 'Property Name' },
+                    { field: 'count', label: 'Tasks', align: 'center' },
+                    { field: 'total', label: 'Total Cost', align: 'right', render: (val) => formatPrice(val) + ' kr' },
+                  ]}
                 />
               </Grid>
             </Grid>
@@ -1105,7 +1208,7 @@ const Reports = () => {
                           {task.due_date ? new Date(task.due_date).toLocaleDateString('is-IS') : '-'}
                         </TableCell>
                         <TableCell align="right" sx={{ fontSize: '0.9rem', fontWeight: 600 }}>
-                          {(task.final_price || 0).toLocaleString('is-IS')}
+                          {formatPrice(task.final_price || 0)}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -1124,7 +1227,7 @@ const Reports = () => {
                 title="Monthly Cost Analysis"
                 action={
                   <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                    <Typography variant="body2" color="textSecondary">Select Year:</Typography>
+                    <Typography variant="body2" color="textSecondary" sx={{ fontWeight: 500 }}>Filter by Year:</Typography>
                     <select
                       value={yearFilter}
                       onChange={(e) => setYearFilter(e.target.value)}
@@ -1153,7 +1256,7 @@ const Reports = () => {
                       <XAxis dataKey="month" />
                       <YAxis />
                       <Tooltip 
-                        formatter={(value) => value.toLocaleString('is-IS', { maximumFractionDigits: 0 })}
+                        formatter={(value) => formatPrice(value)}
                         labelFormatter={(label) => `Month: ${label}`}
                       />
                       <Legend />
@@ -1198,10 +1301,21 @@ const Reports = () => {
                         </TableHead>
                         <TableBody>
                           {monthlyCosts.map((row) => (
-                            <TableRow key={row.month} sx={{ backgroundColor: row.cost > 0 ? 'rgba(21, 101, 192, 0.05)' : 'transparent' }}>
+                            <TableRow 
+                              key={row.month}
+                              onClick={() => {
+                                setSelectedMonth(row.month);
+                                setMonthModalOpen(true);
+                              }}
+                              sx={{ 
+                                backgroundColor: row.cost > 0 ? 'rgba(21, 101, 192, 0.05)' : 'transparent',
+                                cursor: 'pointer',
+                                '&:hover': { backgroundColor: 'rgba(21, 101, 192, 0.15)' }
+                              }}
+                            >
                               <TableCell sx={{ fontWeight: 500 }}>{row.month}</TableCell>
                               <TableCell align="right" sx={{ fontWeight: 600 }}>
-                                {row.cost.toLocaleString('is-IS', { maximumFractionDigits: 0 })}
+                                {formatPrice(row.cost)}
                               </TableCell>
                               <TableCell align="right">{row.count}</TableCell>
                             </TableRow>
@@ -1215,14 +1329,14 @@ const Reports = () => {
 
               <Grid item xs={12} md={6}>
                 <Card>
-                  <CardHeader title="Year Statistics" />
+                  <CardHeader title={yearFilter === 'all' ? 'Overall Statistics' : 'Year Statistics'} />
                   <CardContent>
                     <Box sx={{ mb: 3 }}>
                       <Typography variant="body2" color="textSecondary" sx={{ mb: 1 }}>
-                        Total Year Cost
+                        {yearFilter === 'all' ? 'Total Cost' : 'Total Year Cost'}
                       </Typography>
                       <Typography variant="h4" sx={{ fontWeight: 700, color: '#1565C0' }}>
-                        {monthlyCosts.reduce((sum, m) => sum + m.cost, 0).toLocaleString('is-IS', { maximumFractionDigits: 0 })} kr
+                        {formatPrice(monthlyCosts.reduce((sum, m) => sum + m.cost, 0))} kr
                       </Typography>
                     </Box>
 
@@ -1241,7 +1355,7 @@ const Reports = () => {
                       </Typography>
                       <Typography variant="h4" sx={{ fontWeight: 700, color: '#F57C00' }}>
                         {monthlyCosts.length > 0
-                          ? (monthlyCosts.reduce((sum, m) => sum + m.cost, 0) / 12).toLocaleString('is-IS', { maximumFractionDigits: 0 })
+                          ? formatPrice(monthlyCosts.reduce((sum, m) => sum + m.cost, 0) / 12)
                           : 0} kr
                       </Typography>
                     </Box>
@@ -1266,20 +1380,25 @@ const Reports = () => {
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             {/* Year Filter Card */}
             <Card>
-              <CardContent>
-                <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-                  <Typography variant="body2" color="textSecondary">Year:</Typography>
-                  <select 
-                    value={yearFilter} 
-                    onChange={(e) => setYearFilter(e.target.value)}
-                    style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
-                  >
-                    <option value="all">All Years</option>
-                    {availableYears.map(year => (
-                      <option key={year} value={year}>{year}</option>
-                    ))}
-                  </select>
-                </Box>
+              <CardContent sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, alignItems: 'center' }}>
+                <Typography variant="body2" color="textSecondary" sx={{ fontWeight: 500 }}>Filter by Year:</Typography>
+                <select 
+                  value={yearFilter} 
+                  onChange={(e) => setYearFilter(e.target.value)}
+                  style={{
+                    padding: '6px 8px',
+                    borderRadius: '4px',
+                    border: '1px solid #ddd',
+                    fontSize: '14px',
+                    fontFamily: 'inherit',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <option value="all">All Years</option>
+                  {availableYears.map(year => (
+                    <option key={year} value={year}>{year}</option>
+                  ))}
+                </select>
               </CardContent>
             </Card>
 
@@ -1290,6 +1409,14 @@ const Reports = () => {
                   title="Areas Needing Attention"
                   value={areaMaintenanceData.filter(a => a.open > 0).length}
                   color="#D32F2F"
+                  modalTitle="Areas with Open Tasks"
+                  modalData={areaMaintenanceData.filter(a => a.open > 0)}
+                  modalColumns={[
+                    { field: 'area', label: 'Area Name' },
+                    { field: 'open', label: 'Open Tasks', align: 'center' },
+                    { field: 'finished', label: 'Completed', align: 'center' },
+                    { field: 'total', label: 'Total', align: 'center' },
+                  ]}
                 />
               </Grid>
 
@@ -1298,6 +1425,14 @@ const Reports = () => {
                   title="Open Tasks"
                   value={areaMaintenanceData.reduce((sum, a) => sum + a.open, 0)}
                   color="#FF9800"
+                  modalTitle="Open Tasks"
+                  modalData={filteredTasks.filter(t => t.status !== 'finished')}
+                  modalColumns={[
+                    { field: 'property_name', label: 'Property' },
+                    { field: 'description', label: 'Task', render: (val) => val || '-' },
+                    { field: 'due_date', label: 'Due Date', render: (val) => val ? new Date(val).toLocaleDateString('is-IS') : '-' },
+                    { field: 'status', label: 'Status', render: (val) => val ? val.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : '-' },
+                  ]}
                 />
               </Grid>
 
@@ -1306,6 +1441,14 @@ const Reports = () => {
                   title="Completed in Areas"
                   value={areaMaintenanceData.reduce((sum, a) => sum + a.finished, 0)}
                   color="#4CAF50"
+                  modalTitle="Completed Tasks"
+                  modalData={filteredTasks.filter(t => t.status === 'finished')}
+                  modalColumns={[
+                    { field: 'property_name', label: 'Property' },
+                    { field: 'description', label: 'Task', render: (val) => val || '-' },
+                    { field: 'due_date', label: 'Completed Date', render: (val) => val ? new Date(val).toLocaleDateString('is-IS') : '-' },
+                    { field: 'final_price', label: 'Cost', align: 'right', render: (val) => val ? formatPrice(val) : '' },
+                  ]}
                 />
               </Grid>
             </Grid>
@@ -1384,20 +1527,25 @@ const Reports = () => {
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             {/* Year Filter Card */}
             <Card>
-              <CardContent>
-                <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-                  <Typography variant="body2" color="textSecondary">Year:</Typography>
-                  <select 
-                    value={yearFilter} 
-                    onChange={(e) => setYearFilter(e.target.value)}
-                    style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
-                  >
-                    <option value="all">All Years</option>
-                    {availableYears.map(year => (
-                      <option key={year} value={year}>{year}</option>
-                    ))}
-                  </select>
-                </Box>
+              <CardContent sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, alignItems: 'center' }}>
+                <Typography variant="body2" color="textSecondary" sx={{ fontWeight: 500 }}>Filter by Year:</Typography>
+                <select 
+                  value={yearFilter} 
+                  onChange={(e) => setYearFilter(e.target.value)}
+                  style={{
+                    padding: '6px 8px',
+                    borderRadius: '4px',
+                    border: '1px solid #ddd',
+                    fontSize: '14px',
+                    fontFamily: 'inherit',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <option value="all">All Years</option>
+                  {availableYears.map(year => (
+                    <option key={year} value={year}>{year}</option>
+                  ))}
+                </select>
               </CardContent>
             </Card>
 
@@ -1408,6 +1556,13 @@ const Reports = () => {
                   title="Pending"
                   value={upcomingMaintenanceSchedule.filter(t => t.status === 'pending').length}
                   color="#FFC107"
+                  modalTitle="Pending Tasks"
+                  modalData={upcomingMaintenanceSchedule.filter(t => t.status === 'pending')}
+                  modalColumns={[
+                    { field: 'property_name', label: 'Property' },
+                    { field: 'description', label: 'Task', render: (val) => val || '-' },
+                    { field: 'due_date', label: 'Due Date', render: (val) => val ? new Date(val).toLocaleDateString('is-IS') : '-' },
+                  ]}
                 />
               </Grid>
 
@@ -1416,6 +1571,13 @@ const Reports = () => {
                   title="In Progress"
                   value={upcomingMaintenanceSchedule.filter(t => t.status === 'in_progress').length}
                   color="#2196F3"
+                  modalTitle="In Progress Tasks"
+                  modalData={upcomingMaintenanceSchedule.filter(t => t.status === 'in_progress')}
+                  modalColumns={[
+                    { field: 'property_name', label: 'Property' },
+                    { field: 'description', label: 'Task', render: (val) => val || '-' },
+                    { field: 'due_date', label: 'Due Date', render: (val) => val ? new Date(val).toLocaleDateString('is-IS') : '-' },
+                  ]}
                 />
               </Grid>
 
@@ -1424,6 +1586,14 @@ const Reports = () => {
                   title="Due Within 7 Days"
                   value={upcomingMaintenanceSchedule.filter(t => t.daysUntilDue !== null && t.daysUntilDue <= 7 && t.daysUntilDue > 0).length}
                   color="#D32F2F"
+                  modalTitle="Due Within 7 Days"
+                  modalData={upcomingMaintenanceSchedule.filter(t => t.daysUntilDue !== null && t.daysUntilDue <= 7 && t.daysUntilDue > 0)}
+                  modalColumns={[
+                    { field: 'property_name', label: 'Property' },
+                    { field: 'description', label: 'Task', render: (val) => val || '-' },
+                    { field: 'due_date', label: 'Due Date', render: (val) => val ? new Date(val).toLocaleDateString('is-IS') : '-' },
+                    { field: 'daysUntilDue', label: 'Days Left', align: 'center' },
+                  ]}
                 />
               </Grid>
 
@@ -1432,6 +1602,14 @@ const Reports = () => {
                   title="Overdue"
                   value={upcomingMaintenanceSchedule.filter(t => t.daysUntilDue !== null && t.daysUntilDue <= 0).length}
                   color="#B71C1C"
+                  modalTitle="Overdue Tasks"
+                  modalData={upcomingMaintenanceSchedule.filter(t => t.daysUntilDue !== null && t.daysUntilDue <= 0)}
+                  modalColumns={[
+                    { field: 'property_name', label: 'Property' },
+                    { field: 'description', label: 'Task', render: (val) => val || '-' },
+                    { field: 'due_date', label: 'Due Date', render: (val) => val ? new Date(val).toLocaleDateString('is-IS') : '-' },
+                    { field: 'daysUntilDue', label: 'Days Overdue', align: 'center', render: (val) => Math.abs(val) },
+                  ]}
                 />
               </Grid>
             </Grid>
@@ -1533,20 +1711,25 @@ const Reports = () => {
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             {/* Year Filter Card */}
             <Card>
-              <CardContent>
-                <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-                  <Typography variant="body2" color="textSecondary">Year:</Typography>
-                  <select 
-                    value={yearFilter} 
-                    onChange={(e) => setYearFilter(e.target.value)}
-                    style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
-                  >
-                    <option value="all">All Years</option>
-                    {availableYears.map(year => (
-                      <option key={year} value={year}>{year}</option>
-                    ))}
-                  </select>
-                </Box>
+              <CardContent sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, alignItems: 'center' }}>
+                <Typography variant="body2" color="textSecondary" sx={{ fontWeight: 500 }}>Filter by Year:</Typography>
+                <select 
+                  value={yearFilter} 
+                  onChange={(e) => setYearFilter(e.target.value)}
+                  style={{
+                    padding: '6px 8px',
+                    borderRadius: '4px',
+                    border: '1px solid #ddd',
+                    fontSize: '14px',
+                    fontFamily: 'inherit',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <option value="all">All Years</option>
+                  {availableYears.map(year => (
+                    <option key={year} value={year}>{year}</option>
+                  ))}
+                </select>
               </CardContent>
             </Card>
 
@@ -1557,6 +1740,13 @@ const Reports = () => {
                   title="Refunds Pending"
                   value={refundStatusData.notClaimed}
                   color="#FF9800"
+                  modalTitle="Pending Refund Tasks"
+                  modalData={filteredTasks.filter(t => !t.vat_refund_claimed && t.status === 'finished')}
+                  modalColumns={[
+                    { field: 'property_name', label: 'Property' },
+                    { field: 'description', label: 'Task', render: (val) => val || '-' },
+                    { field: 'due_date', label: 'Date', render: (val) => val ? new Date(val).toLocaleDateString('is-IS') : '-' },
+                  ]}
                 />
               </Grid>
 
@@ -1565,22 +1755,43 @@ const Reports = () => {
                   title="Refunds Claimed"
                   value={refundStatusData.claimed}
                   color="#4CAF50"
+                  modalTitle="Claimed Refund Tasks"
+                  modalData={filteredTasks.filter(t => t.vat_refund_claimed && t.status === 'finished')}
+                  modalColumns={[
+                    { field: 'property_name', label: 'Property' },
+                    { field: 'description', label: 'Task', render: (val) => val || '-' },
+                    { field: 'due_date', label: 'Date', render: (val) => val ? new Date(val).toLocaleDateString('is-IS') : '-' },
+                  ]}
                 />
               </Grid>
 
               <Grid item xs={12} sm={6} md={3}>
                 <StatCard 
                   title="Est. Refund Amount"
-                  value={`${refundStatusData.estimatedRefundAmount.toLocaleString('is-IS')} kr`}
+                  value={`${formatPrice(refundStatusData.estimatedRefundAmount)} kr`}
                   color="#1976D2"
+                  modalTitle="Refundable Tasks"
+                  modalData={filteredTasks.filter(t => t.status === 'finished' && t.price_breakdown && Array.isArray(t.price_breakdown) && t.price_breakdown.some(item => item.category === 'work' && item.vat_refundable))}
+                  modalColumns={[
+                    { field: 'property_name', label: 'Property' },
+                    { field: 'description', label: 'Task', render: (val) => val || '-' },
+                    { field: 'final_price', label: 'Price', align: 'right', render: (val) => formatPrice(val) + ' kr' },
+                  ]}
                 />
               </Grid>
 
               <Grid item xs={12} sm={6} md={3}>
                 <StatCard 
                   title="Total VAT (24%)"
-                  value={`${refundStatusData.refundableAmount.toLocaleString('is-IS')} kr`}
+                  value={`${formatPrice(refundStatusData.refundableAmount)} kr`}
                   color="#7B1FA2"
+                  modalTitle="VAT Breakdown"
+                  modalData={filteredTasks.filter(t => t.status === 'finished' && t.price_breakdown && Array.isArray(t.price_breakdown) && t.price_breakdown.some(item => item.vat_refundable))}
+                  modalColumns={[
+                    { field: 'property_name', label: 'Property' },
+                    { field: 'description', label: 'Task', render: (val) => val || '-' },
+                    { field: 'final_price', label: 'Price', align: 'right', render: (val) => formatPrice(val) + ' kr' },
+                  ]}
                 />
               </Grid>
             </Grid>
@@ -1653,7 +1864,7 @@ const Reports = () => {
                                 </Typography>
                               </TableCell>
                               <TableCell align="right" sx={{ fontWeight: 600 }}>
-                                {vatAmount.toLocaleString('is-IS')} kr
+                                {formatPrice(vatAmount)} kr
                               </TableCell>
                               <TableCell>
                                 <Box sx={{ 
@@ -1670,7 +1881,7 @@ const Reports = () => {
                                 </Box>
                               </TableCell>
                               <TableCell align="right" sx={{ fontWeight: 600 }}>
-                                {estimatedRefund.toLocaleString('is-IS')} kr
+                                {formatPrice(estimatedRefund)} kr
                               </TableCell>
                             </TableRow>
                           );
@@ -1691,7 +1902,17 @@ const Reports = () => {
           fullWidth
         >
           <DialogTitle>
-            Tasks for {selectedMonth} {yearFilter === 'all' ? new Date().getFullYear() : yearFilter}
+            {selectedMonth && (() => {
+              const parts = selectedMonth.split(' ');
+              const monthName = parts[0];
+              const yearInMonth = parts.length > 1 ? parseInt(parts[1]) : null;
+              
+              if (yearFilter === 'all') {
+                return `Tasks for ${selectedMonth}`;
+              } else {
+                return `Tasks for ${monthName} ${yearFilter}`;
+              }
+            })()}
           </DialogTitle>
           <DialogContent sx={{ pt: 2 }}>
             {monthTasks.length > 0 ? (
@@ -1716,7 +1937,7 @@ const Reports = () => {
                         </TableCell>
                         <TableCell>{task.vendor_name}</TableCell>
                         <TableCell align="right" sx={{ fontWeight: 600 }}>
-                          {(task.final_price || 0).toLocaleString('is-IS')}
+                          {formatPrice(task.final_price || 0)}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -1725,17 +1946,26 @@ const Reports = () => {
                         Total:
                       </TableCell>
                       <TableCell align="right" sx={{ fontWeight: 700, color: '#1565C0' }}>
-                        {monthTasks.reduce((sum, t) => sum + (t.final_price || 0), 0).toLocaleString('is-IS')}
+                        {formatPrice(monthTasks.reduce((sum, t) => sum + (t.final_price || 0), 0))}
                       </TableCell>
                     </TableRow>
                   </TableBody>
                 </Table>
               </TableContainer>
-            ) : (
+            ) : selectedMonth ? (
               <Typography color="textSecondary" align="center" sx={{ py: 3 }}>
-                No tasks for {selectedMonth} {yearFilter === 'all' ? new Date().getFullYear() : yearFilter}
+                {(() => {
+                  const parts = selectedMonth.split(' ');
+                  const monthName = parts[0];
+                  
+                  if (yearFilter === 'all') {
+                    return `No tasks for ${selectedMonth}`;
+                  } else {
+                    return `No tasks for ${monthName} ${yearFilter}`;
+                  }
+                })()}
               </Typography>
-            )}
+            ) : null}
           </DialogContent>
           <DialogActions sx={{ p: 2 }}>
             <Button onClick={() => setMonthModalOpen(false)} variant="contained">

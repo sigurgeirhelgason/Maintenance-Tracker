@@ -1,48 +1,128 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Grid,
   Card,
   CardContent,
   Typography,
   Box,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  Table,
+  TableHead,
+  TableBody,
+  TableRow,
+  TableCell,
+  TableContainer,
+  Paper,
 } from '@mui/material';
 
-const StatCard = ({ title, value, subtitle, icon: Icon, color, onClick }) => {
+const StatCard = ({ 
+  title, 
+  value, 
+  subtitle, 
+  icon: Icon, 
+  color, 
+  onClick,
+  modalTitle,
+  modalData,
+  modalColumns,
+}) => {
+  const [modalOpen, setModalOpen] = useState(false);
+
+  const handleCardClick = () => {
+    if (modalData && modalData.length > 0) {
+      setModalOpen(true);
+    } else if (onClick) {
+      onClick();
+    }
+  };
+
+  const handleCloseModal = () => {
+    setModalOpen(false);
+  };
+
   return (
-    <Card
-      sx={{
-        height: '100%',
-        minHeight: 140,
-        borderTop: `3px solid ${color}`,
-        display: 'flex',
-        flexDirection: 'column',
-        cursor: onClick ? 'pointer' : 'default',
-        transition: 'all 0.2s ease',
-        '&:hover': onClick ? {
-          boxShadow: 3,
-          transform: 'translateY(-4px)',
-        } : {},
-      }}
-      onClick={onClick}
-    >
-      <CardContent sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1 }}>
-        <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 2 }}>
-          <Box>
-            <Typography color="textSecondary" variant="body2" sx={{ fontWeight: 500 }}>
-              {title}
-            </Typography>
-            <Typography variant="h3" sx={{ fontWeight: 700, mt: 1 }}>
-              {value}
-            </Typography>
-            {subtitle && (
-              <Typography variant="caption" sx={{ color, fontWeight: 500, mt: 1, display: 'block' }}>
-                {subtitle}
+    <>
+      <Card
+        sx={{
+          height: '100%',
+          minHeight: 140,
+          borderTop: `3px solid ${color}`,
+          display: 'flex',
+          flexDirection: 'column',
+          cursor: (onClick || modalData) ? 'pointer' : 'default',
+          transition: 'all 0.2s ease',
+          '&:hover': (onClick || modalData) ? {
+            boxShadow: 3,
+            transform: 'translateY(-4px)',
+          } : {},
+        }}
+        onClick={handleCardClick}
+      >
+        <CardContent sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 2 }}>
+            <Box>
+              <Typography color="textSecondary" variant="body2" sx={{ fontWeight: 500 }}>
+                {title}
               </Typography>
-            )}
+              <Typography variant="h3" sx={{ fontWeight: 700, mt: 1 }}>
+                {value}
+              </Typography>
+              {subtitle && (
+                <Typography variant="caption" sx={{ color, fontWeight: 500, mt: 1, display: 'block' }}>
+                  {subtitle}
+                </Typography>
+              )}
+            </Box>
           </Box>
-        </Box>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+
+      {/* Modal for displaying data */}
+      <Dialog open={modalOpen} onClose={handleCloseModal} maxWidth="md" fullWidth>
+        <DialogTitle>{modalTitle || title}</DialogTitle>
+        <DialogContent>
+          {modalData && modalData.length > 0 ? (
+            <TableContainer component={Paper} sx={{ mt: 2 }}>
+              <Table size="small">
+                <TableHead sx={{ backgroundColor: '#f5f5f5' }}>
+                  <TableRow>
+                    {modalColumns && modalColumns.map((col) => (
+                      <TableCell 
+                        key={col.field}
+                        align={col.align || 'left'}
+                        sx={{ fontWeight: 700 }}
+                      >
+                        {col.label}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {modalData.map((item, idx) => (
+                    <TableRow key={item.id || idx}>
+                      {modalColumns && modalColumns.map((col) => (
+                        <TableCell key={col.field} align={col.align || 'left'}>
+                          {col.render ? col.render(item[col.field], item) : item[col.field]}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          ) : (
+            <Typography color="textSecondary">No data available</Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseModal}>Close</Button>
+        </DialogActions>
+      </Dialog>
+    </>
   );
 };
 
@@ -116,6 +196,23 @@ export const calculateStatistics = (tasks = [], yearFilter = 'all') => {
 const StatisticsCards = ({ tasks = [], yearFilter = 'all', callbacks = {} }) => {
   const stats = calculateStatistics(tasks, yearFilter);
 
+  // Filter tasks by year for modal data
+  let filteredTasksForModal = tasks;
+  if (yearFilter !== 'all') {
+    const year = parseInt(yearFilter);
+    filteredTasksForModal = tasks.filter(t => {
+      if (!t.due_date && !t.created_date) return false;
+      const taskDate = new Date(t.due_date || t.created_date);
+      return taskDate.getFullYear() === year;
+    });
+  }
+
+  // Add property_name if not present
+  filteredTasksForModal = filteredTasksForModal.map(t => ({
+    ...t,
+    property_name: t.property_name || `Property ${t.property}`,
+  }));
+
   const cardsConfig = [
     {
       title: 'Open Work Orders',
@@ -123,6 +220,14 @@ const StatisticsCards = ({ tasks = [], yearFilter = 'all', callbacks = {} }) => 
       subtitle: 'Not finished',
       color: '#2196f3',
       key: 'openWorkOrders',
+      modalTitle: 'Open Work Orders',
+      modalData: filteredTasksForModal.filter(t => t.status !== 'finished'),
+      modalColumns: [
+        { field: 'property_name', label: 'Property' },
+        { field: 'description', label: 'Task', render: (val) => val || '-' },
+        { field: 'due_date', label: 'Due Date', render: (val) => val ? new Date(val).toLocaleDateString('is-IS') : '-' },
+        { field: 'status', label: 'Status', render: (val) => val ? val.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : '-' },
+      ]
     },
     {
       title: 'Possible VAT Refund',
@@ -130,6 +235,13 @@ const StatisticsCards = ({ tasks = [], yearFilter = 'all', callbacks = {} }) => 
       subtitle: '35% of VAT (24%)',
       color: '#4caf50',
       key: 'possibleRefund',
+      modalTitle: 'Refundable Work Items',
+      modalData: filteredTasksForModal.filter(t => t.status === 'finished' && !t.vat_refund_claimed && t.price_breakdown && Array.isArray(t.price_breakdown) && t.price_breakdown.some(item => item.category === 'work' && item.vat_refundable)),
+      modalColumns: [
+        { field: 'property_name', label: 'Property' },
+        { field: 'description', label: 'Task', render: (val) => val || '-' },
+        { field: 'final_price', label: 'Price', align: 'right', render: (val) => val ? formatPrice(val) + ' kr' : '' },
+      ]
     },
     {
       title: 'Total Investment',
@@ -137,6 +249,14 @@ const StatisticsCards = ({ tasks = [], yearFilter = 'all', callbacks = {} }) => 
       subtitle: 'Finished tasks',
       color: '#ff9800',
       key: 'totalInvestment',
+      modalTitle: 'Finished Tasks',
+      modalData: filteredTasksForModal.filter(t => t.status === 'finished'),
+      modalColumns: [
+        { field: 'property_name', label: 'Property' },
+        { field: 'description', label: 'Task', render: (val) => val || '-' },
+        { field: 'due_date', label: 'Completed Date', render: (val) => val ? new Date(val).toLocaleDateString('is-IS') : '-' },
+        { field: 'final_price', label: 'Cost', align: 'right', render: (val) => val ? formatPrice(val) + ' kr' : '' },
+      ]
     },
     {
       title: 'Total Estimated Cost',
@@ -144,6 +264,14 @@ const StatisticsCards = ({ tasks = [], yearFilter = 'all', callbacks = {} }) => 
       subtitle: 'Unfinished tasks',
       color: '#f44336',
       key: 'totalEstimatedCost',
+      modalTitle: 'Unfinished Tasks',
+      modalData: filteredTasksForModal.filter(t => t.status !== 'finished'),
+      modalColumns: [
+        { field: 'property_name', label: 'Property' },
+        { field: 'description', label: 'Task', render: (val) => val || '-' },
+        { field: 'due_date', label: 'Due Date', render: (val) => val ? new Date(val).toLocaleDateString('is-IS') : '-' },
+        { field: 'estimated_price', label: 'Estimated Cost', align: 'right', render: (val) => val ? formatPrice(val) + ' kr' : '' },
+      ]
     },
   ];
 
@@ -157,6 +285,9 @@ const StatisticsCards = ({ tasks = [], yearFilter = 'all', callbacks = {} }) => 
             subtitle={card.subtitle}
             color={card.color}
             onClick={callbacks[card.key]}
+            modalTitle={card.modalTitle}
+            modalData={card.modalData}
+            modalColumns={card.modalColumns}
           />
         </Grid>
       ))}

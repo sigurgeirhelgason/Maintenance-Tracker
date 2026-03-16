@@ -71,6 +71,7 @@ const Tasks = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState('priority');
   const [sortDirection, setSortDirection] = useState('desc');
+  const [yearFilter, setYearFilter] = useState('all');
   const [filters, setFilters] = useState({
     status: ['pending', 'in_progress'],
     priority: null,
@@ -139,8 +140,17 @@ const Tasks = () => {
       const matchesStatus = filters.status.length === 0 || filters.status.includes(task.status);
       const matchesPriority = !filters.priority || task.priority === filters.priority;
       const matchesProperty = !filters.property || task.property === filters.property;
+      
+      // Year filtering
+      let matchesYear = true;
+      if (yearFilter !== 'all') {
+        const year = parseInt(yearFilter);
+        if (task.due_date) {
+          matchesYear = new Date(task.due_date).getFullYear() === year;
+        }
+      }
 
-      return matchesSearch && matchesStatus && matchesPriority && matchesProperty;
+      return matchesSearch && matchesStatus && matchesPriority && matchesProperty && matchesYear;
     });
 
     // Sort based on sortBy
@@ -186,7 +196,18 @@ const Tasks = () => {
     });
 
     return result;
-  }, [tasks, searchTerm, filters, sortBy, sortDirection]);
+  }, [tasks, searchTerm, filters, sortBy, sortDirection, yearFilter]);
+
+  // Calculate available years from tasks
+  const availableYears = useMemo(() => {
+    const years = new Set();
+    tasks.forEach(task => {
+      if (task.due_date) {
+        years.add(new Date(task.due_date).getFullYear());
+      }
+    });
+    return Array.from(years).sort((a, b) => b - a);
+  }, [tasks]);
 
 
 
@@ -612,7 +633,7 @@ const Tasks = () => {
       {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
 
       {/* Statistics Cards */}
-      {tasks.length > 0 && <StatisticsCards tasks={tasks} yearFilter="all" />}
+      {tasks.length > 0 && <StatisticsCards tasks={tasks} yearFilter={yearFilter} />}
 
       {properties.length === 0 ? (
         <Card>
@@ -624,7 +645,7 @@ const Tasks = () => {
         <Box>
           {/* Property Selector - Only show if more than one property */}
           {properties.length > 1 && (
-            <Box sx={{ mb: 3, display: 'flex', gap: 2 }}>
+            <Box sx={{ mb: 3, display: 'flex', gap: 2, alignItems: 'center' }}>
               <FormControl sx={{ minWidth: 250 }}>
                 <InputLabel>Properties</InputLabel>
                 <Select
@@ -639,24 +660,12 @@ const Tasks = () => {
                   ))}
                 </Select>
               </FormControl>
+              
               <Button
                 variant="contained"
                 startIcon={<AddIcon />}
                 onClick={() => handleOpen()}
                 sx={{ mt: 1 }}
-              >
-                New Task
-              </Button>
-            </Box>
-          )}
-
-          {/* Add New Task Button - Show alone if only one property */}
-          {properties.length === 1 && (
-            <Box sx={{ mb: 3 }}>
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={() => handleOpen()}
               >
                 New Task
               </Button>
@@ -772,6 +781,21 @@ const Tasks = () => {
                   <MenuItem value="low">Low</MenuItem>
                 </Select>
               </FormControl>
+              {availableYears.length > 0 && (
+                <FormControl size="small" sx={{ minWidth: 150 }}>
+                  <InputLabel>Year</InputLabel>
+                  <Select
+                    value={yearFilter}
+                    onChange={(e) => setYearFilter(e.target.value)}
+                    label="Year"
+                  >
+                    <MenuItem value="all">All Years</MenuItem>
+                    {availableYears.map(year => (
+                      <MenuItem key={year} value={year}>{year}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              )}
               {(searchTerm || filters.status.length > 0 || filters.status.length < 3 || filters.priority) && (
                 <Button
                   size="small"
