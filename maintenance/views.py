@@ -2,15 +2,20 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.parsers import MultiPartParser, FormParser
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import OrderingFilter
+from django.http import FileResponse
 from django.contrib.auth.models import User
+from datetime import datetime
 from .models import Property, Area, MaintenanceTask, Vendor, Attachment, TaskType
 from .serializers import (
     PropertySerializer, AreaSerializer, MaintenanceTaskSerializer,
     VendorSerializer, AttachmentSerializer, TaskTypeSerializer,
-    UserRegistrationSerializer, UserSerializer
+    UserRegistrationSerializer, UserSerializer, ExportSerializer, ImportSerializer
 )
+from .services.export_service import DatapackExporter
+from .services.import_service import DatapackImporter
 
 class PropertyViewSet(viewsets.ModelViewSet):
     serializer_class = PropertySerializer
@@ -111,3 +116,56 @@ def get_current_user(request):
     """Get current authenticated user"""
     serializer = UserSerializer(request.user)
     return Response(serializer.data)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def export_datapack(request):
+    """Export all user data to a ZIP file (datapack)"""
+    try:
+        # Create exporter and generate ZIP
+        exporter = DatapackExporter(request.user)
+        zip_buffer = exporter.export()
+        
+        # Return ZIP file as download
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f'maintenance_export_{request.user.id}_{timestamp}.zip'
+        
+        response = FileResponse(zip_buffer, content_type='application/zip')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+    except Exception as e:
+        return Response(
+            {'error': f'Export failed: {str(e)}'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def import_datapack(request):
+    """Import user data from a ZIP datapack file"""
+    serializer = ImportSerializer(data=request.data)
+    
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        # Get the uploaded file
+        zip_file = request.FILES.get('file')
+        if not zip_file:
+            return Response(
+                {'error': 'No file provided'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Create importer and import data
+        importer = DatapackImporter(request.user)
+        summary = importer.import_datapack(zip_file)
+        
+        return Response(summary, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response(
+            {'error': f'Import failed: {str(e)}'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )

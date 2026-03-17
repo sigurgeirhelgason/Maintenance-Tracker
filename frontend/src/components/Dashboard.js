@@ -34,12 +34,16 @@ import {
   Work as WorkIcon,
   Notifications as MaintenanceIcon,
   LocalOffer as RefundIcon,
+  Download as DownloadIcon,
+  Upload as UploadIcon,
 } from '@mui/icons-material';
 import PageHeader from './Layout/PageHeader';
 import TaskCalendar from './TaskCalendar';
 import TaskDetailModal from './TaskDetailModal';
 import VendorDetailModal from './VendorDetailModal';
 import StatisticsCards from './shared/StatisticsCards';
+import NotificationSnackbar from './shared/NotificationSnackbar';
+import { formatWithDots } from '../utils/formatters';
 
 const Dashboard = () => {
   const theme = useTheme();
@@ -54,6 +58,15 @@ const Dashboard = () => {
   const [selectedStatsCategory, setSelectedStatsCategory] = useState(null);
   const [selectedVendor, setSelectedVendor] = useState(null);
   const [vendorDetailModalOpen, setVendorDetailModalOpen] = useState(false);
+  
+  // Export/Import states
+  const [exportLoading, setExportLoading] = useState(false);
+  const [importLoading, setImportLoading] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [notification, setNotification] = useState({ open: false, message: '', type: 'success' });
+  const [importSummary, setImportSummary] = useState(null);
+
+  const formatPrice = (num) => formatWithDots(num);
 
   useEffect(() => {
     fetchDashboardData();
@@ -84,6 +97,80 @@ const Dashboard = () => {
     }
   };
 
+  const handleExport = async () => {
+    try {
+      setExportLoading(true);
+      const response = await axios.post('/api/export/', {}, {
+        responseType: 'blob',
+      });
+
+      // Create a blob URL and trigger download
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `maintenance_export_${new Date().toISOString().slice(0, 10)}.zip`);
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      setNotification({
+        open: true,
+        message: 'Data exported successfully!',
+        type: 'success',
+      });
+    } catch (err) {
+      setNotification({
+        open: true,
+        message: `Export failed: ${err.response?.data?.error || err.message}`,
+        type: 'error',
+      });
+      console.error(err);
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
+  const handleImportClick = () => {
+    setImportDialogOpen(true);
+  };
+
+  const handleImportFile = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setImportLoading(true);
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await axios.post('/api/import/', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      setImportSummary(response.data);
+      setNotification({
+        open: true,
+        message: 'Data imported successfully!',
+        type: 'success',
+      });
+
+      // Refresh dashboard data after successful import
+      await fetchDashboardData();
+    } catch (err) {
+      setNotification({
+        open: true,
+        message: `Import failed: ${err.response?.data?.error || err.message}`,
+        type: 'error',
+      });
+      console.error(err);
+    } finally {
+      setImportLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 400 }}>
@@ -101,6 +188,28 @@ const Dashboard = () => {
       />
 
       {error && <Alert severity="error" sx={{ mb: 4 }}>{error}</Alert>}
+
+      {/* Export/Import Buttons */}
+      <Box sx={{ mb: 4, display: 'flex', gap: 2 }}>
+        <Button
+          variant="contained"
+          color="primary"
+          startIcon={<DownloadIcon />}
+          onClick={handleExport}
+          disabled={exportLoading}
+        >
+          {exportLoading ? 'Exporting...' : 'Export Data'}
+        </Button>
+        <Button
+          variant="contained"
+          color="secondary"
+          startIcon={<UploadIcon />}
+          onClick={handleImportClick}
+          disabled={importLoading}
+        >
+          {importLoading ? 'Importing...' : 'Import Data'}
+        </Button>
+      </Box>
 
       {/* Statistics Cards */}
       {tasks.length > 0 && <StatisticsCards tasks={tasks} yearFilter="all" />}
@@ -304,6 +413,97 @@ const Dashboard = () => {
         vendor={selectedVendor}
         onClose={() => setVendorDetailModalOpen(false)}
         onEdit={() => { setVendorDetailModalOpen(false); }}
+      />
+
+      {/* Import Dialog */}
+      <Dialog open={importDialogOpen} onClose={() => !importLoading && setImportDialogOpen(false)}>
+        <DialogTitle>Import Data</DialogTitle>
+        <DialogContent sx={{ minWidth: 400, py: 3 }}>
+          <Typography variant="body2" sx={{ mb: 2 }}>
+            Select a ZIP file to import your maintenance data.
+          </Typography>
+          <input
+            type="file"
+            accept=".zip"
+            onChange={(e) => {
+              handleImportFile(e);
+              setImportDialogOpen(false);
+            }}
+            disabled={importLoading}
+            style={{ width: '100%' }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setImportDialogOpen(false)} disabled={importLoading}>
+            Cancel
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Import Summary Dialog */}
+      <Dialog open={!!importSummary} onClose={() => setImportSummary(null)} maxWidth="sm" fullWidth>
+        <DialogTitle>Import Summary</DialogTitle>
+        <DialogContent sx={{ py: 3 }}>
+          {importSummary && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              <Typography variant="body2">
+                <strong>Properties Created:</strong> {importSummary.properties_created}
+              </Typography>
+              <Typography variant="body2">
+                <strong>Properties Updated:</strong> {importSummary.properties_updated}
+              </Typography>
+              <Typography variant="body2">
+                <strong>Areas Created:</strong> {importSummary.areas_created}
+              </Typography>
+              <Typography variant="body2">
+                <strong>Areas Updated:</strong> {importSummary.areas_updated}
+              </Typography>
+              <Typography variant="body2">
+                <strong>Vendors Created:</strong> {importSummary.vendors_created}
+              </Typography>
+              <Typography variant="body2">
+                <strong>Vendors Updated:</strong> {importSummary.vendors_updated}
+              </Typography>
+              <Typography variant="body2">
+                <strong>Tasks Created:</strong> {importSummary.tasks_created}
+              </Typography>
+              <Typography variant="body2">
+                <strong>Tasks Updated:</strong> {importSummary.tasks_updated}
+              </Typography>
+              <Typography variant="body2">
+                <strong>Attachments Created:</strong> {importSummary.attachments_created}
+              </Typography>
+              <Typography variant="body2">
+                <strong>Files Restored:</strong> {importSummary.files_restored}
+              </Typography>
+              {importSummary.errors && importSummary.errors.length > 0 && (
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="body2" sx={{ color: 'error.main', fontWeight: 600, mb: 1 }}>
+                    Errors:
+                  </Typography>
+                  <Box sx={{ pl: 2 }}>
+                    {importSummary.errors.map((error, idx) => (
+                      <Typography key={idx} variant="caption" sx={{ display: 'block', color: 'error.main' }}>
+                        • {error}
+                      </Typography>
+                    ))}
+                  </Box>
+                </Box>
+              )}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setImportSummary(null)}>Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Notification Snackbar */}
+      <NotificationSnackbar
+        open={notification.open}
+        message={notification.message}
+        type={notification.type}
+        onClose={() => setNotification({ ...notification, open: false })}
       />
 
       {/* Stats Category Modal */}

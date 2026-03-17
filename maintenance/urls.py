@@ -4,7 +4,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from .views import (
     PropertyViewSet, AreaViewSet, MaintenanceTaskViewSet,
     VendorViewSet, AttachmentViewSet, TaskTypeViewSet,
-    register, get_current_user
+    register, get_current_user, export_datapack, import_datapack
 )
 
 router = DefaultRouter()
@@ -21,4 +21,7 @@ urlpatterns = [
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('register/', register, name='register'),
     path('user/me/', get_current_user, name='get_current_user'),
+    # Export/Import endpoints
+    path('export/', export_datapack, name='export_datapack'),
+    path('import/', import_datapack, name='import_datapack'),
 ] + router.urls

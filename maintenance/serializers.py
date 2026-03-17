@@ -124,3 +124,13 @@ class MaintenanceTaskSerializer(serializers.ModelSerializer):
 
     def get_attachments(self, obj):
         return AttachmentSerializer(obj.attachments.all(), many=True).data
+
+
+class ExportSerializer(serializers.Serializer):
+    """Serializer for export endpoint - accepts no input, returns file download"""
+    pass
+
+
+class ImportSerializer(serializers.Serializer):
+    """Serializer for import endpoint - accepts ZIP file upload"""
+    file = serializers.FileField(required=True, help_text='ZIP file containing datapack')
