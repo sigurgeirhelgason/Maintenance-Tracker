@@ -258,11 +258,21 @@ const Areas = () => {
 
   return (
     <Box>
-      <PageHeader
-        title="Areas/Rooms"
-        subtitle="Manage areas or rooms in your properties"
-        breadcrumbs={[{ label: 'Home', path: '/' }, { label: 'Areas' }]}
-      />
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 4 }}>
+        <PageHeader
+          title="Areas/Rooms"
+          subtitle="Manage areas or rooms in your properties"
+          breadcrumbs={[{ label: 'Home', path: '/' }, { label: 'Areas' }]}
+        />
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
+          onClick={() => handleOpen()}
+          sx={{ mt: 1 }}
+        >
+          New Area
+        </Button>
+      </Box>
 
       {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
 
@@ -291,30 +301,9 @@ const Areas = () => {
                   ))}
                 </Select>
               </FormControl>
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={() => handleOpen()}
-                sx={{ ml: 2, mt: 1 }}
-              >
-                Add Area
-              </Button>
             </Box>
           )}
           
-          {/* Single Property - Add Area Button */}
-          {properties.length === 1 && (
-            <Box sx={{ mb: 4 }}>
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={() => handleOpen()}
-              >
-                Add Area
-              </Button>
-            </Box>
-          )}
-
           {/* Property Info */}
           {currentProperty && (
             <>

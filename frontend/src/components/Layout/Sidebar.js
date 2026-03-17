@@ -30,6 +30,13 @@ import {
   ExpandLess as ExpandLessIcon,
   ExpandMore as ExpandMoreIcon,
   Assessment as ReportsIcon,
+  BarChart as BarChartIcon,
+  LibraryBooks as MaintenanceHistoryIcon,
+  TrendingUp as TrendingUpIcon,
+  Apartment as AreaMaintenanceIcon,
+  DateRange as ScheduleIcon,
+  AttachMoney as VATRefundIcon,
+  BusinessCenter as VendorPerformanceIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../../AuthContext';
 
@@ -107,14 +114,14 @@ const Sidebar = ({ open, setOpen }) => {
       label: 'Reports', 
       icon: ReportsIcon,
       children: [
-        { path: '/reports/cost-analysis', label: 'Cost Analysis', icon: ReportsIcon },
-        { path: '/reports/task-status', label: 'Task Status', icon: ReportsIcon },
-        { path: '/reports/vendor-performance', label: 'Vendor Performance', icon: ReportsIcon },
-        { path: '/reports/maintenance-history', label: 'Maintenance History', icon: ReportsIcon },
-        { path: '/reports/monthly-costs', label: 'Monthly Costs', icon: ReportsIcon },
-        { path: '/reports/area-maintenance', label: 'Area Maintenance', icon: ReportsIcon },
-        { path: '/reports/schedule', label: 'Maintenance Schedule', icon: ReportsIcon },
-        { path: '/reports/vat-refunds', label: 'VAT Refunds', icon: ReportsIcon },
+        { path: '/reports/cost-analysis', label: 'Cost Analysis', icon: BarChartIcon },
+        { path: '/reports/task-status', label: 'Task Status', icon: BarChartIcon },
+        { path: '/reports/vendor-performance', label: 'Vendor Performance', icon: VendorPerformanceIcon },
+        { path: '/reports/maintenance-history', label: 'Maintenance History', icon: MaintenanceHistoryIcon },
+        { path: '/reports/monthly-costs', label: 'Monthly Costs', icon: TrendingUpIcon },
+        { path: '/reports/area-maintenance', label: 'Area Maintenance', icon: AreaMaintenanceIcon },
+        { path: '/reports/schedule', label: 'Maintenance Schedule', icon: ScheduleIcon },
+        { path: '/reports/vat-refunds', label: 'VAT Refunds', icon: VATRefundIcon },
       ]
     },
   ];

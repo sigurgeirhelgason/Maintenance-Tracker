@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
+import { formatWithDots, removeDots } from '../utils/formatters';
 import {
   Box,
   Card,
@@ -40,20 +41,6 @@ import ConfirmDialog from './shared/ConfirmDialog';
 import NotificationSnackbar from './shared/NotificationSnackbar';
 import StatisticsCards from './shared/StatisticsCards';
 import { useNotification, useConfirmDialog } from './shared/hooks';
-
-// Format number with dot thousand separators (e.g., 200000 -> "200.000")
-const formatDotThousands = (num) => {
-  if (num === '' || num === null || num === undefined) return '';
-  const numStr = String(num).replace(/\D/g, ''); // Remove non-digits
-  if (!numStr) return '';
-  return numStr.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-};
-
-// Parse dot thousand separator format back to number (e.g., "200.000" -> 200000)
-const parseDotThousands = (str) => {
-  if (!str) return '';
-  return str.replace(/\./g, '');
-};
 
 const Tasks = () => {
   const [properties, setProperties] = useState([]);
@@ -320,8 +307,8 @@ const Tasks = () => {
     
     if (name === 'estimated_price' || name === 'final_price') {
       // Format price input with dot thousand separators
-      const numericValue = parseDotThousands(value);
-      const formattedValue = formatDotThousands(numericValue);
+      const numericValue = removeDots(value);
+      const formattedValue = formatWithDots(numericValue);
       
       if (name === 'final_price') {
         // When final_price changes, update price_breakdown in real-time
@@ -421,7 +408,7 @@ const Tasks = () => {
         updated[index] = { ...updated[index], [field]: value, vat_refundable: value === 'work' };
       } else if (field === 'amount') {
         // Format and parse price amounts
-        const numericValue = parseDotThousands(value);
+        const numericValue = removeDots(value);
         updated[index] = { ...updated[index], [field]: numericValue ? parseInt(numericValue) : '' };
       } else {
         updated[index] = { ...updated[index], [field]: value };
@@ -429,7 +416,7 @@ const Tasks = () => {
       
       // If amount field was changed and final_price is set, recalculate "uncategorized"
       if (field === 'amount' && prev.final_price) {
-        const finalPrice = parseInt(parseDotThousands(prev.final_price)) || 0;
+        const finalPrice = parseInt(removeDots(prev.final_price)) || 0;
         
         // Calculate sum of all non-"uncategorized" items
         let sumNonOther = 0;
@@ -496,8 +483,8 @@ const Tasks = () => {
         task_type: formData.task_type?.id || formData.task_type || null,
         vendor: formData.vendor?.id || formData.vendor || null,
         due_date: formData.due_date || null,
-        estimated_price: formData.estimated_price ? parseInt(parseDotThousands(formData.estimated_price)) : null,
-        final_price: formData.final_price ? parseInt(parseDotThousands(formData.final_price)) : null,
+        estimated_price: formData.estimated_price ? parseInt(removeDots(formData.estimated_price)) : null,
+        final_price: formData.final_price ? parseInt(removeDots(formData.final_price)) : null,
         vat_refund_claimed: formData.vat_refund_claimed,
       };
 
@@ -624,11 +611,21 @@ const Tasks = () => {
 
   return (
     <Box>
-      <PageHeader
-        title="Tasks"
-        subtitle="Manage maintenance tasks across properties"
-        breadcrumbs={[{ label: 'Home', path: '/' }, { label: 'Tasks' }]}
-      />
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 4 }}>
+        <PageHeader
+          title="Tasks"
+          subtitle="Manage maintenance tasks across properties"
+          breadcrumbs={[{ label: 'Home', path: '/' }, { label: 'Tasks' }]}
+        />
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
+          onClick={() => handleOpen()}
+          sx={{ mt: 1 }}
+        >
+          New Task
+        </Button>
+      </Box>
 
       {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
 
@@ -953,9 +950,9 @@ const Tasks = () => {
                         </TableCell>
                         <TableCell sx={{ fontSize: '0.9rem', textAlign: 'right', fontWeight: 500 }}>
                           {task.final_price
-                            ? parseFloat(task.final_price).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ' Kr.'
+                            ? formatWithDots(task.final_price) + ' Kr.'
                             : task.estimated_price
-                            ? parseFloat(task.estimated_price).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ' Kr.'
+                            ? formatWithDots(task.estimated_price) + ' Kr.'
                             : '-'
                           }
                         </TableCell>
@@ -1019,7 +1016,7 @@ const Tasks = () => {
                   {selectedTask.final_price && (
                     <DetailField label="ACTUAL COST">
                       <Typography variant="body2" sx={{ fontWeight: 600, color: '#F44336' }}>
-                        {parseFloat(selectedTask.final_price).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.')} Kr.
+                        {formatWithDots(selectedTask.final_price)} Kr.
                       </Typography>
                     </DetailField>
                   )}
@@ -1035,7 +1032,7 @@ const Tasks = () => {
                             </Box>
                             <Box sx={{ textAlign: 'right' }}>
                               <Typography variant="caption">
-                                {formatDotThousands(item.amount)} Kr. {item.vat_refundable && '(VAT)'}
+                                {formatWithDots(item.amount)} Kr. {item.vat_refundable && '(VAT)'}
                               </Typography>
                             </Box>
                           </Box>
@@ -1044,7 +1041,7 @@ const Tasks = () => {
                           <Box sx={{ display: 'grid', gridTemplateColumns: '0.8fr 0.6fr', gap: 1, p: 1, borderTop: '1px solid #ccc', fontWeight: 600, fontSize: '0.9rem' }}>
                             <Box>Total</Box>
                             <Box sx={{ textAlign: 'right' }}>
-                              {formatDotThousands(selectedTask.price_breakdown.reduce((sum, item) => sum + (parseInt(item.amount) || 0), 0))} Kr.
+                              {formatWithDots(selectedTask.price_breakdown.reduce((sum, item) => sum + (parseInt(item.amount) || 0), 0))} Kr.
                             </Box>
                           </Box>
                         )}
@@ -1343,7 +1340,7 @@ const Tasks = () => {
                           size="small"
                           label="Amount"
                           type="text"
-                          value={formatDotThousands(item.amount || '')}
+                          value={formatWithDots(item.amount || '')}
                           onChange={(e) => updatePriceBreakdownItem(index, 'amount', e.target.value)}
                           inputProps={{ min: '0' }}
                           variant="outlined"
@@ -1375,8 +1372,8 @@ const Tasks = () => {
                       const { total, vatRefundable } = calculatePriceBreakdownTotals();
                       return (
                         <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, pt: 1, borderTop: '1px solid #ccc' }}>
-                          <Typography variant="body2"><strong>Total:</strong> {formatDotThousands(total)} Kr.</Typography>
-                          <Typography variant="body2"><strong>VAT Refundable (35%):</strong> {formatDotThousands(Math.round(vatRefundable * 0.35))} Kr.</Typography>
+                          <Typography variant="body2"><strong>Total:</strong> {formatWithDots(total)} Kr.</Typography>
+                          <Typography variant="body2"><strong>VAT Refundable (35%):</strong> {formatWithDots(Math.round(vatRefundable * 0.35))} Kr.</Typography>
                         </Box>
                       );
                     })()}

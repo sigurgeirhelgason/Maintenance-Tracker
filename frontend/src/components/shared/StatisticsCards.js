@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { formatWithDots } from '../../utils/formatters';
 import {
   Grid,
   Card,
@@ -133,11 +134,6 @@ const StatCard = ({
  * @returns {Object} Statistics object with calculated values
  */
 export const calculateStatistics = (tasks = [], yearFilter = 'all') => {
-  // Format number with dots as thousand separators (Icelandic format)
-  const formatPrice = (num) => {
-    return Math.floor(num).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-  };
-
   // Filter tasks by year if needed
   let filteredTasks = tasks;
   if (yearFilter !== 'all') {
@@ -182,7 +178,7 @@ export const calculateStatistics = (tasks = [], yearFilter = 'all') => {
     possibleRefund,
     totalInvestment,
     totalEstimatedCost,
-    formatPrice,
+    formatPrice: formatWithDots,
   };
 };
 
@@ -240,7 +236,7 @@ const StatisticsCards = ({ tasks = [], yearFilter = 'all', callbacks = {} }) => 
       modalColumns: [
         { field: 'property_name', label: 'Property' },
         { field: 'description', label: 'Task', render: (val) => val || '-' },
-        { field: 'final_price', label: 'Price', align: 'right', render: (val) => val ? formatPrice(val) + ' kr' : '' },
+        { field: 'final_price', label: 'Price', align: 'right', render: (val) => val ? formatWithDots(val) + ' kr' : '' },
       ]
     },
     {
@@ -255,7 +251,7 @@ const StatisticsCards = ({ tasks = [], yearFilter = 'all', callbacks = {} }) => 
         { field: 'property_name', label: 'Property' },
         { field: 'description', label: 'Task', render: (val) => val || '-' },
         { field: 'due_date', label: 'Completed Date', render: (val) => val ? new Date(val).toLocaleDateString('is-IS') : '-' },
-        { field: 'final_price', label: 'Cost', align: 'right', render: (val) => val ? formatPrice(val) + ' kr' : '' },
+        { field: 'final_price', label: 'Cost', align: 'right', render: (val) => val ? formatWithDots(val) + ' kr' : '' },
       ]
     },
     {
@@ -270,7 +266,7 @@ const StatisticsCards = ({ tasks = [], yearFilter = 'all', callbacks = {} }) => 
         { field: 'property_name', label: 'Property' },
         { field: 'description', label: 'Task', render: (val) => val || '-' },
         { field: 'due_date', label: 'Due Date', render: (val) => val ? new Date(val).toLocaleDateString('is-IS') : '-' },
-        { field: 'estimated_price', label: 'Estimated Cost', align: 'right', render: (val) => val ? formatPrice(val) + ' kr' : '' },
+        { field: 'estimated_price', label: 'Estimated Cost', align: 'right', render: (val) => val ? formatWithDots(val) + ' kr' : '' },
       ]
     },
   ];

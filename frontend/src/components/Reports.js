@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import { useParams, useNavigate } from 'react-router-dom';
+import { formatWithDots } from '../utils/formatters';
 import {
   Box,
   Card,
@@ -31,6 +32,10 @@ import {
   TrendingUp as TrendingUpIcon,
   Assessment as AssessmentIcon,
   DateRange as DateRangeIcon,
+  LibraryBooks as MaintenanceHistoryIcon,
+  Apartment as AreaMaintenanceIcon,
+  AttachMoney as VATRefundIcon,
+  BusinessCenter as VendorPerformanceIcon,
 } from '@mui/icons-material';
 import {
   PieChart,
@@ -49,12 +54,6 @@ import {
 } from 'recharts';
 import PageHeader from './Layout/PageHeader';
 import StatisticsCards, { StatCard } from './shared/StatisticsCards';
-
-// Format numbers with dots as thousand separators (Icelandic style)
-const formatPrice = (num) => {
-  if (typeof num !== 'number') num = parseFloat(num) || 0;
-  return Math.floor(num).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-};
 
 const Reports = () => {
   const { reportType } = useParams();
@@ -618,14 +617,14 @@ const Reports = () => {
           }} 
           sx={{ mb: 3 }}
         >
-          <Tab label="Cost Analysis" icon={<TrendingUpIcon />} iconPosition="start" />
-          <Tab label="Task Status" icon={<AssessmentIcon />} iconPosition="start" />
-          <Tab label="Vendor Performance" icon={<BarChartIcon />} iconPosition="start" />
-          <Tab label="Maintenance History" icon={<TrendingUpIcon />} iconPosition="start" />
-          <Tab label="Monthly Costs" icon={<DateRangeIcon />} iconPosition="start" />
-          <Tab label="Area Maintenance" icon={<AssessmentIcon />} iconPosition="start" />
+          <Tab label="Cost Analysis" icon={<BarChartIcon />} iconPosition="start" />
+          <Tab label="Task Status" icon={<BarChartIcon />} iconPosition="start" />
+          <Tab label="Vendor Performance" icon={<VendorPerformanceIcon />} iconPosition="start" />
+          <Tab label="Maintenance History" icon={<MaintenanceHistoryIcon />} iconPosition="start" />
+          <Tab label="Monthly Costs" icon={<TrendingUpIcon />} iconPosition="start" />
+          <Tab label="Area Maintenance" icon={<AreaMaintenanceIcon />} iconPosition="start" />
           <Tab label="Maintenance Schedule" icon={<DateRangeIcon />} iconPosition="start" />
-          <Tab label="VAT Refunds" icon={<TrendingUpIcon />} iconPosition="start" />
+          <Tab label="VAT Refunds" icon={<VATRefundIcon />} iconPosition="start" />
         </Tabs>
 
         {/* Cost Analysis Tab */}
@@ -680,7 +679,7 @@ const Reports = () => {
                             <Cell key={`cell-${index}`} fill={['#1565C0', '#2E7D32', '#F57C00', '#D32F2F', '#7B1FA2', '#C2185B'][index % 6]} />
                           ))}
                         </Pie>
-                        <Tooltip formatter={(value) => formatPrice(value)} />
+                        <Tooltip formatter={(value) => formatWithDots(value)} />
                       </PieChart>
                     </ResponsiveContainer>
                   </CardContent>
@@ -696,7 +695,7 @@ const Reports = () => {
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="type" angle={-45} textAnchor="end" height={80} />
                         <YAxis />
-                        <Tooltip formatter={(value) => formatPrice(value)} />
+                        <Tooltip formatter={(value) => formatWithDots(value)} />
                         <Legend />
                         <Bar dataKey="actual" fill="#4CAF50" name="Actual Cost" />
                         <Bar dataKey="estimated" fill="#FFC107" name="Estimated Cost" />
@@ -727,7 +726,7 @@ const Reports = () => {
                             <TableRow key={row.property}>
                               <TableCell>{row.property}</TableCell>
                               <TableCell align="right">{row.count}</TableCell>
-                              <TableCell align="right" sx={{ fontWeight: 600 }}>{formatPrice(row.actual)}</TableCell>
+                              <TableCell align="right" sx={{ fontWeight: 600 }}>{formatWithDots(row.actual)}</TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
@@ -759,9 +758,9 @@ const Reports = () => {
                               <TableCell>{row.type}</TableCell>
                               <TableCell align="right">{row.count}</TableCell>
                               <TableCell align="right" sx={{ color: '#4CAF50', fontWeight: 600 }}>{row.finishedCount}</TableCell>
-                              <TableCell align="right" sx={{ fontWeight: 600, color: '#4CAF50' }}>{formatPrice(row.actual)}</TableCell>
-                              <TableCell align="right" sx={{ fontWeight: 600, color: '#FFC107' }}>{formatPrice(row.estimated)}</TableCell>
-                              <TableCell align="right">{formatPrice(row.average)}</TableCell>
+                              <TableCell align="right" sx={{ fontWeight: 600, color: '#4CAF50' }}>{formatWithDots(row.actual)}</TableCell>
+                              <TableCell align="right" sx={{ fontWeight: 600, color: '#FFC107' }}>{formatWithDots(row.estimated)}</TableCell>
+                              <TableCell align="right">{formatWithDots(row.average)}</TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
@@ -847,7 +846,7 @@ const Reports = () => {
                     { field: 'property_name', label: 'Property' },
                     { field: 'description', label: 'Task', render: (val) => val || '-' },
                     { field: 'due_date', label: 'Completed Date', render: (val) => val ? new Date(val).toLocaleDateString('is-IS') : '-' },
-                    { field: 'final_price', label: 'Cost', align: 'right', render: (val) => val ? formatPrice(val) : '' },
+                    { field: 'final_price', label: 'Cost', align: 'right', render: (val) => val ? formatWithDots(val) : '' },
                   ]}
                 />
               </Grid>
@@ -1004,7 +1003,7 @@ const Reports = () => {
                   modalColumns={[
                     { field: 'vendor', label: 'Vendor Name' },
                     { field: 'completed', label: 'Completed Tasks', align: 'center' },
-                    { field: 'total', label: 'Total Value', align: 'right', render: (val) => formatPrice(val) + ' kr' },
+                    { field: 'total', label: 'Total Value', align: 'right', render: (val) => formatWithDots(val) + ' kr' },
                   ]}
                 />
               </Grid>
@@ -1096,7 +1095,7 @@ const Reports = () => {
                               {vendor.vendor}
                             </Typography>
                             <Typography variant="body2" sx={{ fontWeight: 700, color: '#1565C0' }}>
-                              {formatPrice(vendor.total)} kr
+                              {formatWithDots(vendor.total)} kr
                             </Typography>
                           </Box>
                           <Box sx={{ width: '100%', height: 8, bgcolor: '#f0f0f0', borderRadius: 1, overflow: 'hidden' }}>
@@ -1133,7 +1132,7 @@ const Reports = () => {
                       <TableRow key={index}>
                         <TableCell>{vendor.vendor}</TableCell>
                         <TableCell align="right">
-                          {formatPrice(vendor.total)} kr
+                          {formatWithDots(vendor.total)} kr
                         </TableCell>
                         <TableCell align="right">{vendor.tasks}</TableCell>
                         <TableCell align="right">{vendor.completed}</TableCell>
@@ -1189,7 +1188,7 @@ const Reports = () => {
                     { field: 'property_name', label: 'Property' },
                     { field: 'description', label: 'Task', render: (val) => val || '-' },
                     { field: 'due_date', label: 'Completed Date', render: (val) => val ? new Date(val).toLocaleDateString('is-IS') : '-' },
-                    { field: 'final_price', label: 'Cost', align: 'right', render: (val) => val ? formatPrice(val) + ' kr' : '' },
+                    { field: 'final_price', label: 'Cost', align: 'right', render: (val) => val ? formatWithDots(val) + ' kr' : '' },
                   ]}
                 />
               </Grid>
@@ -1197,7 +1196,7 @@ const Reports = () => {
               <Grid item xs={12} sm={4}>
                 <StatCard 
                   title="Total Spent"
-                  value={`${formatPrice(maintenanceHistory.reduce((sum, t) => sum + (t.final_price || 0), 0))} kr`}
+                  value={`${formatWithDots(maintenanceHistory.reduce((sum, t) => sum + (t.final_price || 0), 0))} kr`}
                   color="#4CAF50"
                   modalTitle="Cost Breakdown"
                   modalData={maintenanceHistory.filter(t => t.final_price > 0)}
@@ -1205,7 +1204,7 @@ const Reports = () => {
                     { field: 'property_name', label: 'Property' },
                     { field: 'description', label: 'Task', render: (val) => val || '-' },
                     { field: 'due_date', label: 'Date', render: (val) => val ? new Date(val).toLocaleDateString('is-IS') : '-' },
-                    { field: 'final_price', label: 'Cost', align: 'right', render: (val) => formatPrice(val) + ' kr' },
+                    { field: 'final_price', label: 'Cost', align: 'right', render: (val) => formatWithDots(val) + ' kr' },
                   ]}
                 />
               </Grid>
@@ -1220,7 +1219,7 @@ const Reports = () => {
                   modalColumns={[
                     { field: 'property_name', label: 'Property Name' },
                     { field: 'count', label: 'Tasks', align: 'center' },
-                    { field: 'total', label: 'Total Cost', align: 'right', render: (val) => formatPrice(val) + ' kr' },
+                    { field: 'total', label: 'Total Cost', align: 'right', render: (val) => formatWithDots(val) + ' kr' },
                   ]}
                 />
               </Grid>
@@ -1251,7 +1250,7 @@ const Reports = () => {
                           {task.due_date ? new Date(task.due_date).toLocaleDateString('is-IS') : '-'}
                         </TableCell>
                         <TableCell align="right" sx={{ fontSize: '0.9rem', fontWeight: 600 }}>
-                          {formatPrice(task.final_price || 0)}
+                          {formatWithDots(task.final_price || 0)}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -1299,7 +1298,7 @@ const Reports = () => {
                       <XAxis dataKey="month" />
                       <YAxis />
                       <Tooltip 
-                        formatter={(value) => formatPrice(value)}
+                        formatter={(value) => formatWithDots(value)}
                         labelFormatter={(label) => `Month: ${label}`}
                       />
                       <Legend />
@@ -1358,7 +1357,7 @@ const Reports = () => {
                             >
                               <TableCell sx={{ fontWeight: 500 }}>{row.month}</TableCell>
                               <TableCell align="right" sx={{ fontWeight: 600 }}>
-                                {formatPrice(row.cost)}
+                                {formatWithDots(row.cost)}
                               </TableCell>
                               <TableCell align="right">{row.count}</TableCell>
                             </TableRow>
@@ -1379,7 +1378,7 @@ const Reports = () => {
                         {yearFilter === 'all' ? 'Total Cost' : 'Total Year Cost'}
                       </Typography>
                       <Typography variant="h4" sx={{ fontWeight: 700, color: '#1565C0' }}>
-                        {formatPrice(monthlyCosts.reduce((sum, m) => sum + m.cost, 0))} kr
+                        {formatWithDots(monthlyCosts.reduce((sum, m) => sum + m.cost, 0))} kr
                       </Typography>
                     </Box>
 
@@ -1398,7 +1397,7 @@ const Reports = () => {
                       </Typography>
                       <Typography variant="h4" sx={{ fontWeight: 700, color: '#F57C00' }}>
                         {monthlyCosts.length > 0
-                          ? formatPrice(monthlyCosts.reduce((sum, m) => sum + m.cost, 0) / 12)
+                          ? formatWithDots(monthlyCosts.reduce((sum, m) => sum + m.cost, 0) / 12)
                           : 0} kr
                       </Typography>
                     </Box>
@@ -1490,7 +1489,7 @@ const Reports = () => {
                     { field: 'property_name', label: 'Property' },
                     { field: 'description', label: 'Task', render: (val) => val || '-' },
                     { field: 'due_date', label: 'Completed Date', render: (val) => val ? new Date(val).toLocaleDateString('is-IS') : '-' },
-                    { field: 'final_price', label: 'Cost', align: 'right', render: (val) => val ? formatPrice(val) : '' },
+                    { field: 'final_price', label: 'Cost', align: 'right', render: (val) => val ? formatWithDots(val) : '' },
                   ]}
                 />
               </Grid>
@@ -1818,14 +1817,14 @@ const Reports = () => {
               <Grid item xs={12} sm={6} md={3}>
                 <StatCard 
                   title="Est. Refund Amount"
-                  value={`${formatPrice(refundStatusData.estimatedRefundAmount)} kr`}
+                  value={`${formatWithDots(refundStatusData.estimatedRefundAmount)} kr`}
                   color="#1976D2"
                   modalTitle="Refundable Tasks"
                   modalData={filteredTasks.filter(t => t.status === 'finished' && t.price_breakdown && Array.isArray(t.price_breakdown) && t.price_breakdown.some(item => item.category === 'work' && item.vat_refundable))}
                   modalColumns={[
                     { field: 'property_name', label: 'Property' },
                     { field: 'description', label: 'Task', render: (val) => val || '-' },
-                    { field: 'final_price', label: 'Price', align: 'right', render: (val) => formatPrice(val) + ' kr' },
+                    { field: 'final_price', label: 'Price', align: 'right', render: (val) => formatWithDots(val) + ' kr' },
                   ]}
                 />
               </Grid>
@@ -1833,14 +1832,14 @@ const Reports = () => {
               <Grid item xs={12} sm={6} md={3}>
                 <StatCard 
                   title="Total VAT (24%)"
-                  value={`${formatPrice(refundStatusData.refundableAmount)} kr`}
+                  value={`${formatWithDots(refundStatusData.refundableAmount)} kr`}
                   color="#7B1FA2"
                   modalTitle="VAT Breakdown"
                   modalData={filteredTasks.filter(t => t.status === 'finished' && t.price_breakdown && Array.isArray(t.price_breakdown) && t.price_breakdown.some(item => item.vat_refundable))}
                   modalColumns={[
                     { field: 'property_name', label: 'Property' },
                     { field: 'description', label: 'Task', render: (val) => val || '-' },
-                    { field: 'final_price', label: 'Price', align: 'right', render: (val) => formatPrice(val) + ' kr' },
+                    { field: 'final_price', label: 'Price', align: 'right', render: (val) => formatWithDots(val) + ' kr' },
                   ]}
                 />
               </Grid>
@@ -1914,7 +1913,7 @@ const Reports = () => {
                                 </Typography>
                               </TableCell>
                               <TableCell align="right" sx={{ fontWeight: 600 }}>
-                                {formatPrice(vatAmount)} kr
+                                {formatWithDots(vatAmount)} kr
                               </TableCell>
                               <TableCell>
                                 <Box sx={{ 
@@ -1931,7 +1930,7 @@ const Reports = () => {
                                 </Box>
                               </TableCell>
                               <TableCell align="right" sx={{ fontWeight: 600 }}>
-                                {formatPrice(estimatedRefund)} kr
+                                {formatWithDots(estimatedRefund)} kr
                               </TableCell>
                             </TableRow>
                           );
@@ -1987,7 +1986,7 @@ const Reports = () => {
                         </TableCell>
                         <TableCell>{task.vendor_name}</TableCell>
                         <TableCell align="right" sx={{ fontWeight: 600 }}>
-                          {formatPrice(task.final_price || 0)}
+                          {formatWithDots(task.final_price || 0)}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -1996,7 +1995,7 @@ const Reports = () => {
                         Total:
                       </TableCell>
                       <TableCell align="right" sx={{ fontWeight: 700, color: '#1565C0' }}>
-                        {formatPrice(monthTasks.reduce((sum, t) => sum + (t.final_price || 0), 0))}
+                        {formatWithDots(monthTasks.reduce((sum, t) => sum + (t.final_price || 0), 0))}
                       </TableCell>
                     </TableRow>
                   </TableBody>
@@ -2071,7 +2070,7 @@ const Reports = () => {
                               </TableCell>
                               <TableCell>{task.vendor_name}</TableCell>
                               <TableCell align="right" sx={{ fontWeight: 600 }}>
-                                {formatPrice(task.final_price || 0)}
+                                {formatWithDots(task.final_price || 0)}
                               </TableCell>
                             </TableRow>
                           ))}
@@ -2080,7 +2079,7 @@ const Reports = () => {
                               Subtotal:
                             </TableCell>
                             <TableCell align="right" sx={{ fontWeight: 700, color: '#1565C0' }}>
-                              {formatPrice(statusGroup.total)}
+                              {formatWithDots(statusGroup.total)}
                             </TableCell>
                           </TableRow>
                         </TableBody>
@@ -2090,7 +2089,7 @@ const Reports = () => {
                 ))}
                 <Box sx={{ mt: 3, pt: 2, borderTop: '2px solid #e0e0e0' }}>
                   <Typography variant="h6" sx={{ fontWeight: 700, textAlign: 'right' }}>
-                    Grand Total: {formatPrice(areaTasksForModal.reduce((sum, t) => sum + (t.final_price || 0), 0))} kr
+                    Grand Total: {formatWithDots(areaTasksForModal.reduce((sum, t) => sum + (t.final_price || 0), 0))} kr
                   </Typography>
                 </Box>
               </Box>

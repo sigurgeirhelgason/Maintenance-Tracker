@@ -11,15 +11,8 @@ import {
   Divider,
 } from '@mui/material';
 import { Close as CloseIcon } from '@mui/icons-material';
+import { formatWithDots } from '../utils/formatters';
 import DetailField from './shared/DetailField';
-
-// Format number with dot thousand separators (e.g., 200000 -> "200.000")
-const formatDotThousands = (num) => {
-  if (num === '' || num === null || num === undefined) return '';
-  const numStr = String(num).replace(/\D/g, ''); // Remove non-digits
-  if (!numStr) return '';
-  return numStr.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-};
 
 const TaskDetailModal = ({ open, task, onClose }) => {
   if (!task) return null;
@@ -180,7 +173,7 @@ const TaskDetailModal = ({ open, task, onClose }) => {
         {task.estimated_price && (
           <DetailField
             label="ESTIMATED PRICE"
-            value={`${formatDotThousands(task.estimated_price)} ${task.currency || 'Krónur'}`}
+            value={`${formatWithDots(task.estimated_price)} ${task.currency || 'Krónur'}`}
           />
         )}
 
@@ -188,7 +181,7 @@ const TaskDetailModal = ({ open, task, onClose }) => {
         {task.final_price && (
           <DetailField
             label="FINAL PRICE"
-            value={`${formatDotThousands(task.final_price)} ${task.currency || 'Krónur'}`}
+            value={`${formatWithDots(task.final_price)} ${task.currency || 'Krónur'}`}
           />
         )}
 
