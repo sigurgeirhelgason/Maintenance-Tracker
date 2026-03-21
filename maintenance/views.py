@@ -8,9 +8,9 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import OrderingFilter, SearchFilter
 from django.http import FileResponse
 from django.contrib.auth.models import User
-from django.db.models import Q, Case, When, Value, IntegerField, F
+from django.db.models import Q, Case, When, Value, IntegerField, F, Prefetch
 from datetime import datetime
-from .models import Property, Area, MaintenanceTask, Vendor, Attachment, TaskType, DataShare
+from .models import Property, Area, MaintenanceTask, Vendor, Attachment, TaskType, DataShare, UserVendorPreference
 from .serializers import (
     PropertySerializer, AreaSerializer, MaintenanceTaskSerializer,
     VendorSerializer, AttachmentSerializer, TaskTypeSerializer,
@@ -50,10 +50,37 @@ class PropertyViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        # Return properties for the current user and shared properties
+        # Return properties for the current user and shared properties, with all
+        # related data prefetched to eliminate N+1 queries in PropertySerializer.
         user = self.request.user
         shared_users = DataShare.objects.filter(shared_with=user).values_list('owner_id', flat=True)
-        return Property.objects.filter(Q(user=user) | Q(user__in=shared_users))
+
+        # Prefetch UserVendorPreference rows for the current user so that
+        # VendorSerializer.get_favorite() and get_saved() can be resolved from
+        # the in-memory cache instead of issuing one query per vendor per task.
+        vendor_prefs_prefetch = Prefetch(
+            'tasks__vendor__user_preferences',
+            queryset=UserVendorPreference.objects.filter(user=user),
+            to_attr='_user_prefs',
+        )
+
+        return (
+            Property.objects
+            .filter(Q(user=user) | Q(user__in=shared_users))
+            .select_related('user')
+            .prefetch_related(
+                'areas',
+                'tasks',
+                'tasks__user',
+                'tasks__task_type',
+                'tasks__areas',
+                'tasks__attachments',
+                'tasks__vendor',
+                'tasks__vendor__speciality',
+                'tasks__vendor__secondary_specialities',
+                vendor_prefs_prefetch,
+            )
+        )
 
     def perform_create(self, serializer):
         # Automatically set the current user

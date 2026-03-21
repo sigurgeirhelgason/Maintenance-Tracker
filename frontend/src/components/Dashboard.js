@@ -9,17 +9,10 @@ import {
   Box,
   List,
   ListItem,
-  ListItemText,
   Chip,
   Alert,
   CircularProgress,
   useTheme,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Button,
   Dialog,
   DialogTitle,
@@ -27,13 +20,6 @@ import {
   DialogActions,
 } from '@mui/material';
 import {
-  Schedule as PendingIcon,
-  Autorenew as InProgressIcon,
-  CheckCircle as FinishedIcon,
-  Apartment as PropertiesIcon,
-  Work as WorkIcon,
-  Notifications as MaintenanceIcon,
-  LocalOffer as RefundIcon,
   Download as DownloadIcon,
   Upload as UploadIcon,
 } from '@mui/icons-material';
@@ -54,8 +40,6 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedTask, setSelectedTask] = useState(null);
-  const [statsModalOpen, setStatsModalOpen] = useState(false);
-  const [selectedStatsCategory, setSelectedStatsCategory] = useState(null);
   const [selectedVendor, setSelectedVendor] = useState(null);
   const [vendorDetailModalOpen, setVendorDetailModalOpen] = useState(false);
   
@@ -86,9 +70,9 @@ const Dashboard = () => {
       const fetchedProperties = Array.isArray(propertiesResponse.data) ? propertiesResponse.data : [];
       const fetchedVendors = Array.isArray(vendorsResponse.data) ? vendorsResponse.data : [];
 
-      setTasks(fetchedTasks.slice(0, 10));
-      setProperties(fetchedProperties.slice(0, 3));
-      setVendors(fetchedVendors.slice(0, 5));
+      setTasks(fetchedTasks);
+      setProperties(fetchedProperties);
+      setVendors(fetchedVendors);
     } catch (err) {
       setError('Failed to load dashboard data');
       console.error(err);
@@ -168,6 +152,7 @@ const Dashboard = () => {
       console.error(err);
     } finally {
       setImportLoading(false);
+      setImportDialogOpen(false);
     }
   };
 
@@ -427,7 +412,6 @@ const Dashboard = () => {
             accept=".zip"
             onChange={(e) => {
               handleImportFile(e);
-              setImportDialogOpen(false);
             }}
             disabled={importLoading}
             style={{ width: '100%' }}
@@ -506,185 +490,6 @@ const Dashboard = () => {
         onClose={() => setNotification({ ...notification, open: false })}
       />
 
-      {/* Stats Category Modal */}
-      <Dialog open={statsModalOpen} onClose={() => setStatsModalOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>
-          {selectedStatsCategory === 'openWorkOrders' && 'Open Work Orders'}
-          {selectedStatsCategory === 'upcomingMaintenance' && 'Upcoming Maintenance'}
-          {selectedStatsCategory === 'possibleRefund' && 'Possible VAT Refund'}
-        </DialogTitle>
-        <DialogContent sx={{ maxHeight: 600, overflow: 'auto' }}>
-          {selectedStatsCategory === 'openWorkOrders' && (
-            <List sx={{ pt: 2 }}>
-              {tasks.filter(t => t.status !== 'finished').map((task, index) => (
-                <ListItem
-                  key={task.id}
-                  onClick={() => {
-                    setSelectedTask(task);
-                    setStatsModalOpen(false);
-                  }}
-                  sx={{
-                    border: '1px solid #eee',
-                    borderRadius: 1,
-                    mb: 2,
-                    p: 2,
-                    cursor: 'pointer',
-                    '&:hover': { backgroundColor: '#f5f5f5', borderColor: '#2196f3' },
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'flex-start',
-                  }}
-                >
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%', mb: 1 }}>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                      {task.description}
-                    </Typography>
-                    <Chip
-                      label={task.status === 'pending' ? 'Pending' : 'In Progress'}
-                      size="small"
-                      color={task.status === 'pending' ? 'warning' : 'info'}
-                      variant="filled"
-                    />
-                  </Box>
-                  <Box sx={{ display: 'flex', gap: 3, width: '100%', mt: 1 }}>
-                    <Typography variant="caption" sx={{ color: 'textSecondary' }}>
-                      <strong>Property:</strong> {task.property_details?.name || 'N/A'}
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: 'textSecondary' }}>
-                      <strong>Vendor:</strong> {task.vendor_details?.name || '-'}
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: 'textSecondary' }}>
-                        <strong>Cost:</strong> {task.cost ? `${formatPrice(task.cost)} Kr.` : '-'}
-                    </Typography>
-                  </Box>
-                </ListItem>
-              ))}
-            </List>
-          )}
-
-          {selectedStatsCategory === 'upcomingMaintenance' && (
-            <List sx={{ pt: 2 }}>
-              {tasks.filter(t => t.status !== 'finished').map((task, index) => (
-                <ListItem
-                  key={task.id}
-                  onClick={() => {
-                    setSelectedTask(task);
-                    setStatsModalOpen(false);
-                  }}
-                  sx={{
-                    border: '1px solid #eee',
-                    borderRadius: 1,
-                    mb: 2,
-                    p: 2,
-                    cursor: 'pointer',
-                    '&:hover': { backgroundColor: '#f5f5f5', borderColor: '#4caf50' },
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'flex-start',
-                  }}
-                >
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%', mb: 1 }}>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                      {task.description}
-                    </Typography>
-                    <Chip
-                      label={task.status === 'pending' ? 'Pending' : 'In Progress'}
-                      size="small"
-                      color={task.status === 'pending' ? 'warning' : 'info'}
-                      variant="filled"
-                    />
-                  </Box>
-                  <Box sx={{ display: 'flex', gap: 3, width: '100%', mt: 1 }}>
-                    <Typography variant="caption" sx={{ color: 'textSecondary' }}>
-                      <strong>Property:</strong> {task.property_details?.name || 'N/A'}
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: 'textSecondary' }}>
-                      <strong>Vendor:</strong> {task.vendor_details?.name || '-'}
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: 'textSecondary' }}>
-                      <strong>Cost:</strong> {task.cost ? `${formatPrice(task.cost)} Kr.` : '-'}
-                    </Typography>
-                  </Box>
-                </ListItem>
-              ))}
-            </List>
-          )}
-
-          {selectedStatsCategory === 'possibleRefund' && (
-            <List sx={{ pt: 2 }}>
-              {tasks.filter(t => {
-                const hasVatRefundable = t.price_breakdown && t.price_breakdown.some(item => item.vat_refundable);
-                const hasFinalWorkPrice = t.final_work_price;
-                return t.status === 'finished' && !t.vat_refund_claimed && (hasVatRefundable || hasFinalWorkPrice);
-              }).length > 0 ? (
-                tasks.filter(t => {
-                  const hasVatRefundable = t.price_breakdown && t.price_breakdown.some(item => item.vat_refundable);
-                  const hasFinalWorkPrice = t.final_work_price;
-                  return t.status === 'finished' && !t.vat_refund_claimed && (hasVatRefundable || hasFinalWorkPrice);
-                }).map((task) => {
-                  let vatRefundableAmount = 0;
-                  if (task.price_breakdown && task.price_breakdown.length > 0) {
-                    vatRefundableAmount = task.price_breakdown
-                      .filter(item => item.vat_refundable)
-                      .reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
-                  } else {
-                    vatRefundableAmount = parseFloat(task.final_work_price) || 0;
-                  }
-                  const refundAmount = Math.floor(vatRefundableAmount * 0.24 * 0.35);
-                  
-                  return (
-                    <ListItem
-                      key={task.id}
-                      onClick={() => {
-                        setSelectedTask(task);
-                        setStatsModalOpen(false);
-                      }}
-                      sx={{
-                        border: '1px solid #eee',
-                        borderRadius: 1,
-                        mb: 2,
-                        p: 2,
-                        cursor: 'pointer',
-                        '&:hover': { backgroundColor: '#f5f5f5', borderColor: '#4caf50' },
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'flex-start',
-                      }}
-                    >
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%', mb: 1 }}>
-                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                          {task.description}
-                        </Typography>
-                        <Chip
-                          label="Finished"
-                          size="small"
-                          color="success"
-                          variant="filled"
-                        />
-                      </Box>
-                      <Box sx={{ display: 'flex', gap: 3, width: '100%', mt: 1 }}>
-                        <Typography variant="caption" sx={{ color: 'textSecondary' }}>
-                          <strong>VAT Refundable:</strong> {formatPrice(vatRefundableAmount)} Kr.
-                        </Typography>
-                        <Typography variant="caption" sx={{ fontWeight: 600, color: '#4caf50' }}>
-                          <strong>Refund (35% of 24% VAT):</strong> {formatPrice(refundAmount)} Kr.
-                        </Typography>
-                      </Box>
-                    </ListItem>
-                  );
-                })
-              ) : (
-                <Typography color="textSecondary" sx={{ textAlign: 'center', py: 4 }}>
-                  No finished tasks with VAT refundable costs available for refund claim.
-                </Typography>
-              )}
-            </List>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setStatsModalOpen(false)}>Close</Button>
-        </DialogActions>
-      </Dialog>
     </Box>
   );
 };

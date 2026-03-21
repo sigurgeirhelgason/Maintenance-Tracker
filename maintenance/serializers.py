@@ -154,30 +154,39 @@ class VendorSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ['user', 'user_email', 'created_at', 'updated_at', 'is_global', 'favorite', 'saved']
     
-    def get_favorite(self, obj):
-        """Check if the requesting user has marked this vendor as favorite"""
+    def _get_user_pref(self, obj):
+        """
+        Return the UserVendorPreference for the requesting user and this vendor.
+
+        When the vendor was loaded via PropertyViewSet's prefetch
+        (to_attr='_user_prefs'), the rows are already in memory and no extra
+        query is issued.  For all other call sites the preference is fetched
+        with a single filter query (the original behaviour).
+        """
         request = self.context.get('request')
         if not request or not request.user.is_authenticated:
-            return False
-        
+            return None
+
+        # Fast path: use the prefetched list placed by PropertyViewSet
+        if hasattr(obj, '_user_prefs'):
+            prefs = obj._user_prefs  # list filtered to request.user already
+            return prefs[0] if prefs else None
+
+        # Slow path: direct DB query (used by VendorViewSet and toggle actions)
         from .models import UserVendorPreference
-        pref = UserVendorPreference.objects.filter(
+        return UserVendorPreference.objects.filter(
             user=request.user,
             vendor=obj
         ).first()
+
+    def get_favorite(self, obj):
+        """Check if the requesting user has marked this vendor as favorite"""
+        pref = self._get_user_pref(obj)
         return pref.is_favorite if pref else False
 
     def get_saved(self, obj):
         """Check if the requesting user has saved this vendor"""
-        request = self.context.get('request')
-        if not request or not request.user.is_authenticated:
-            return False
-        
-        from .models import UserVendorPreference
-        pref = UserVendorPreference.objects.filter(
-            user=request.user,
-            vendor=obj
-        ).first()
+        pref = self._get_user_pref(obj)
         return pref.is_saved if pref else False
 
 class AttachmentSerializer(serializers.ModelSerializer):

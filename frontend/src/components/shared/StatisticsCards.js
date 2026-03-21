@@ -232,7 +232,7 @@ const StatisticsCards = ({ tasks = [], yearFilter = 'all', callbacks = {} }) => 
       color: '#4caf50',
       key: 'possibleRefund',
       modalTitle: 'Refundable Work Items',
-      modalData: filteredTasksForModal.filter(t => t.status === 'finished' && !t.vat_refund_claimed && t.price_breakdown && Array.isArray(t.price_breakdown) && t.price_breakdown.some(item => item.category === 'work' && item.vat_refundable)),
+      modalData: filteredTasksForModal.filter(t => t.status === 'finished' && !t.vat_refund_claimed && t.price_breakdown && Array.isArray(t.price_breakdown) && t.price_breakdown.some(item => item.category === 'work' && item.vat_refundable === true)),
       modalColumns: [
         { field: 'property_name', label: 'Property' },
         { field: 'description', label: 'Task', render: (val) => val || '-' },
