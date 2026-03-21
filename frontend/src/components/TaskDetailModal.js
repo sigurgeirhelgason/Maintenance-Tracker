@@ -152,6 +152,24 @@ const TaskDetailModal = ({ open, task, onClose }) => {
             value={task.vendor_details.name || 'N/A'}
           />
         )}
+        {task.vendor_details?.contact_person && (
+          <DetailField
+            label="CONTACT PERSON"
+            value={task.vendor_details.contact_person}
+          />
+        )}
+        {task.vendor_details?.phone && (
+          <DetailField
+            label="PHONE"
+            value={task.vendor_details.phone}
+          />
+        )}
+        {task.vendor_details?.email && (
+          <DetailField
+            label="EMAIL"
+            value={task.vendor_details.email}
+          />
+        )}
 
         {/* Areas */}
         {task.areas_details && task.areas_details.length > 0 && (

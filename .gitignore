@@ -69,3 +69,4 @@ yarn-error.log*
 # AI models and outputs
 .claude/
 .mcp.json
+PENDING_TESTS.md

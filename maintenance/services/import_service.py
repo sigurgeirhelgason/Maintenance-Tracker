@@ -1,5 +1,6 @@
 import csv
 import io
+import logging
 import os
 import zipfile
 import json
@@ -7,6 +8,8 @@ from datetime import datetime
 from django.core.files.base import ContentFile
 from django.db import transaction
 from ..models import Property, Area, MaintenanceTask, Vendor, Attachment, TaskType
+
+logger = logging.getLogger(__name__)
 
 
 class DatapackImporter:
@@ -58,9 +61,10 @@ class DatapackImporter:
                     self._import_task_areas(zf)
                     self._import_attachments(zf)
         except Exception as e:
+            logger.warning("Datapack import failed for user %s: %s", self.user.pk, e)
             self.import_summary['errors'].append(str(e))
             raise e
-        
+
         return self.import_summary
     
     def _validate_zip_structure(self, zf):
@@ -388,4 +392,5 @@ class DatapackImporter:
             file_field = getattr(model_instance, field_name)
             file_field.save(original_filename, ContentFile(file_content), save=True)
         except Exception as e:
+            logger.warning("Error restoring file %s during import: %s", zip_path, e)
             self.import_summary['errors'].append(f"Error restoring file {zip_path}: {str(e)}")

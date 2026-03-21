@@ -350,9 +350,11 @@ const Vendors = ({ initialTab = 'personal' }) => {
         <Card>
           <CardContent sx={{ py: 6, textAlign: 'center' }}>
             <Typography color="textSecondary">No vendors yet. Create one to get started.</Typography>
-            <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpen()} sx={{ mt: 2 }}>
-              New Vendor
-            </Button>
+            {viewTab === 'personal' && (
+              <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpen()} sx={{ mt: 2 }}>
+                New Vendor
+              </Button>
+            )}
           </CardContent>
         </Card>
       ) : (

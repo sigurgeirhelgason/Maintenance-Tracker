@@ -1,5 +1,6 @@
 import csv
 import io
+import logging
 import os
 import zipfile
 import json
@@ -7,6 +8,8 @@ from datetime import datetime
 from django.core.files.storage import default_storage
 from django.conf import settings
 from ..models import Property, Area, MaintenanceTask, Vendor, Attachment
+
+logger = logging.getLogger(__name__)
 
 
 class DatapackExporter:
@@ -237,6 +240,5 @@ class DatapackExporter:
         try:
             file_content = file_field.read()
             self.zip_file.writestr(zip_path, file_content)
-        except Exception:
-            # Skip files that can't be read
-            pass
+        except Exception as e:
+            logger.warning("Could not add file %s to export ZIP: %s", zip_path, e)

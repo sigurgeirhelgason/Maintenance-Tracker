@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate
-from .models import Property, Area, MaintenanceTask, TaskType, Vendor, Attachment, UserProfile, DataShare
+from .models import Property, Area, MaintenanceTask, TaskType, Vendor, Attachment, UserProfile, DataShare, UserVendorPreference
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
     """Registration serializer - users register with email and password"""
@@ -150,7 +150,7 @@ class VendorSerializer(serializers.ModelSerializer):
     class Meta:
         model = Vendor
         fields = '__all__'
-        read_only_fields = ['user', 'user_email', 'created_at', 'updated_at', 'is_global', 'favorite', 'saved']
+        read_only_fields = ['user', 'user_email', 'created_at', 'updated_at', 'is_global', 'is_premium', 'favorite', 'saved']
     
     def _get_user_pref(self, obj):
         """
@@ -171,7 +171,6 @@ class VendorSerializer(serializers.ModelSerializer):
             return prefs[0] if prefs else None
 
         # Slow path: direct DB query (used by VendorViewSet and toggle actions)
-        from .models import UserVendorPreference
         return UserVendorPreference.objects.filter(
             user=request.user,
             vendor=obj
@@ -212,17 +211,42 @@ class MaintenanceTaskSerializer(serializers.ModelSerializer):
         """Validate that final_price can only be set when status is 'finished'"""
         final_price = data.get('final_price')
         status = data.get('status')
-        
+
+        # On PATCH, fall back to the instance's existing value only when the
+        # field was entirely absent from the submitted payload.  If the caller
+        # explicitly sent `final_price: null` (i.e. the key is present in
+        # initial_data), treat that as an intentional clear and do NOT
+        # substitute the stored value.
+        if self.instance and final_price is None and 'final_price' not in self.initial_data:
+            final_price = self.instance.final_price
+
         # If updating, also check the instance's current status if status is not being changed
         if self.instance:
             status = status or self.instance.status
-        
+
         if final_price is not None and final_price > 0 and status != 'finished':
             raise serializers.ValidationError(
                 {'final_price': 'Final price can only be set when task status is "Finished".'}
             )
-        
+
         return data
+
+    def validate_vendor(self, value):
+        """Ensure the requesting user has access to the assigned vendor."""
+        if value is None:
+            return value
+        request = self.context.get('request')
+        if request:
+            from django.db.models import Q
+            user = request.user
+            shared_owners = DataShare.objects.filter(shared_with=user).values_list('owner_id', flat=True)
+            if not (
+                value.user == user or
+                value.is_global or
+                (value.user_id and value.user_id in shared_owners)
+            ):
+                raise serializers.ValidationError("You do not have access to this vendor.")
+        return value
 
     def get_attachments(self, obj):
         return AttachmentSerializer(obj.attachments.all(), many=True).data

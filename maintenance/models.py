@@ -3,7 +3,10 @@ from django.core.validators import MinValueValidator
 from django.contrib.auth.models import User
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+import logging
 import os
+
+logger = logging.getLogger(__name__)
 
 class UserProfile(models.Model):
     """User profile for storing user preferences and settings"""
@@ -37,8 +40,8 @@ def save_user_profile(sender, instance, **kwargs):
     if not hasattr(instance, 'profile') or instance.profile is None:
         try:
             UserProfile.objects.create(user=instance)
-        except:
-            pass  # Profile might already exist, ignore error
+        except Exception as e:
+            logger.warning("Failed to create UserProfile for user %s: %s", instance.pk, e)
     else:
         instance.profile.save()
 
@@ -180,7 +183,7 @@ class MaintenanceTask(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ['-created_date']
+        ordering = ['-created_at']
 
     def __str__(self):
         return f"{self.description} - {self.get_status_display()}"

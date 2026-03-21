@@ -5,21 +5,20 @@ Provides utilities to check read/write permissions for shared data.
 
 from django.contrib.auth.models import User
 from django.db.models import Q
+from maintenance.models import DataShare
 
 
 def get_shareable_users(user):
     """
     Get a list of all users whose data this user should have access to.
     Includes the user themselves and any users who have shared data with them.
-    
+
     Args:
         user: The requesting User object
-        
+
     Returns:
         Q object for filtering querysets to include user's own data and shared data
     """
-    from maintenance.models import DataShare
-    
     # Get all users who have shared data with this user
     shared_user_ids = DataShare.objects.filter(
         shared_with=user
@@ -44,9 +43,7 @@ def can_read(user, resource_owner, resource_type):
     # User can always read their own data
     if user == resource_owner:
         return True
-    
-    from maintenance.models import DataShare
-    
+
     try:
         share = DataShare.objects.get(owner=resource_owner, shared_with=user)
         permission = share.get_permission(resource_type)
@@ -71,9 +68,7 @@ def can_write(user, resource_owner, resource_type):
     # User can always write their own data
     if user == resource_owner:
         return True
-    
-    from maintenance.models import DataShare
-    
+
     try:
         share = DataShare.objects.get(owner=resource_owner, shared_with=user)
         permission = share.get_permission(resource_type)

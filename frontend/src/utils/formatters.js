@@ -22,6 +22,6 @@ export const formatWithDots = (num) => {
  * Remove dot thousand separator format (e.g., "200.000" -> "200000")
  */
 export const removeDots = (str) => {
-  if (!str) return '';
-  return str.replace(/\./g, '');
+  if (str == null || str === '') return '';
+  return String(str).replace(/\./g, '');
 };

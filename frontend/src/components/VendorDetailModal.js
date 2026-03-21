@@ -27,17 +27,8 @@ const VendorDetailModal = ({ open, vendor, onClose, onEdit, onToggleFavorite, on
   const [vendorTasks, setVendorTasks] = useState([]);
   const [tasksLoading, setTasksLoading] = useState(false);
   const [tasksError, setTasksError] = useState(null);
-  const [isFavorite, setIsFavorite] = useState(vendor?.favorite || false);
-  const [isSaved, setIsSaved] = useState(vendor?.saved || false);
   const [sortBy, setSortBy] = useState('description');
   const [sortDirection, setSortDirection] = useState('asc');
-
-  useEffect(() => {
-    if (vendor) {
-      setIsFavorite(vendor.favorite || false);
-      setIsSaved(vendor.saved || false);
-    }
-  }, [vendor?.id, vendor?.favorite, vendor?.saved]);
 
   useEffect(() => {
     if (open && vendor) {
@@ -136,28 +127,26 @@ const VendorDetailModal = ({ open, vendor, onClose, onEdit, onToggleFavorite, on
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', gap: 1 }}>
-          <IconButton 
-            size="small" 
+          <IconButton
+            size="small"
             onClick={() => {
-              setIsFavorite(!isFavorite);
               onToggleFavorite?.(vendor);
             }}
-            sx={{ color: isFavorite ? '#ffc107' : 'inherit' }}
+            sx={{ color: vendor?.favorite ? '#ffc107' : 'inherit' }}
             title="Add to favorites"
           >
-            {isFavorite ? <StarIcon /> : <StarBorderIcon />}
+            {vendor?.favorite ? <StarIcon /> : <StarBorderIcon />}
           </IconButton>
           {vendor?.is_global && (
-            <IconButton 
-              size="small" 
+            <IconButton
+              size="small"
               onClick={() => {
-                setIsSaved(!isSaved);
                 onToggleSaved?.(vendor);
               }}
-              sx={{ color: isSaved ? '#2196f3' : 'inherit' }}
-              title={isSaved ? 'Remove from My Vendors' : 'Save to My Vendors'}
+              sx={{ color: vendor?.saved ? '#2196f3' : 'inherit' }}
+              title={vendor?.saved ? 'Remove from My Vendors' : 'Save to My Vendors'}
             >
-              {isSaved ? <DownloadIcon /> : <DownloadIcon sx={{ opacity: 0.5 }} />}
+              {vendor?.saved ? <DownloadIcon /> : <DownloadIcon sx={{ opacity: 0.5 }} />}
             </IconButton>
           )}
           <IconButton size="small" onClick={onClose}>
@@ -368,7 +357,7 @@ const VendorDetailModal = ({ open, vendor, onClose, onEdit, onToggleFavorite, on
 
       <DialogActions sx={{ pt: 2, borderTop: '1px solid #e0e0e0' }}>
         {(!vendor?.is_global || isAdmin) && (
-          <Button onClick={() => { onClose(); onEdit?.(); }} variant="contained" color="primary">
+          <Button onClick={() => { onEdit?.(); onClose(); }} variant="contained" color="primary">
             Edit
           </Button>
         )}

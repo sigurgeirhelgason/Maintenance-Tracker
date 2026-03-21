@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import { formatWithDots, removeDots } from '../utils/formatters';
+import { useAuth } from '../AuthContext';
 import {
   Box,
   Card,
@@ -43,6 +44,7 @@ import StatisticsCards from './shared/StatisticsCards';
 import { useNotification, useConfirmDialog } from './shared/hooks';
 
 const Tasks = () => {
+  const { user } = useAuth();
   const [properties, setProperties] = useState([]);
   const [areas, setAreas] = useState([]);
   const [taskTypes, setTaskTypes] = useState([]);
@@ -122,7 +124,7 @@ const Tasks = () => {
 
   const filteredTasks = useMemo(() => {
     let result = tasks.filter(task => {
-      const matchesSearch = task.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      const matchesSearch = (task.description || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         (task.vendor?.name || '').toLowerCase().includes(searchTerm.toLowerCase());
       const matchesStatus = filters.status.length === 0 || filters.status.includes(task.status);
       const matchesPriority = !filters.priority || task.priority === filters.priority;
@@ -132,9 +134,9 @@ const Tasks = () => {
       let matchesYear = true;
       if (yearFilter !== 'all') {
         const year = parseInt(yearFilter);
-        if (task.due_date) {
-          matchesYear = new Date(task.due_date).getFullYear() === year;
-        }
+        matchesYear = task.due_date
+          ? new Date(task.due_date).getFullYear() === year
+          : false;
       }
 
       return matchesSearch && matchesStatus && matchesPriority && matchesProperty && matchesYear;
@@ -196,14 +198,23 @@ const Tasks = () => {
     return Array.from(years).sort((a, b) => b - a);
   }, [tasks]);
 
-
-
-  useEffect(() => {
-    if (selectedProperty) {
-      fetchAreasForProperty(selectedProperty);
-      fetchTasksForProperty(selectedProperty);
+  // Vendors available for selection: ones the user owns or has favorited.
+  // When editing, always include the task's currently assigned vendor so the
+  // dropdown doesn't show a blank selected value.
+  const selectableVendors = useMemo(() => {
+    const filtered = vendors.filter(v => v.favorite || (user && v.user === user.id));
+    if (editing?.vendor) {
+      const currentVendorId = editing.vendor?.id ?? editing.vendor;
+      const alreadyIncluded = filtered.some(v => v.id === currentVendorId);
+      if (!alreadyIncluded) {
+        const currentVendor = vendors.find(v => v.id === currentVendorId);
+        if (currentVendor) return [...filtered, currentVendor];
+      }
     }
-  }, [selectedProperty]);
+    return filtered;
+  }, [vendors, user, editing]);
+
+
 
   const handleSortClick = (newSort) => {
     if (sortBy === newSort) {
@@ -269,8 +280,9 @@ const Tasks = () => {
       setEditing(task);
       setFormData({
         ...task,
-        estimated_price: task.estimated_price || '',
-        final_price: task.final_price || '',
+        estimated_price: task.estimated_price != null ? formatWithDots(task.estimated_price) : '',
+        final_price: task.final_price != null ? formatWithDots(task.final_price) : '',
+        due_date: task.due_date || '',
         vat_refund_claimed: task.vat_refund_claimed || false,
         price_breakdown: task.price_breakdown || [],
         custom_field_values: task.custom_field_values || {},
@@ -416,7 +428,7 @@ const Tasks = () => {
       
       // If amount field was changed and final_price is set, recalculate "uncategorized"
       if (field === 'amount' && prev.final_price) {
-        const finalPrice = parseInt(removeDots(prev.final_price)) || 0;
+        const finalPrice = parseInt(removeDots(String(prev.final_price))) || 0;
         
         // Calculate sum of all non-"uncategorized" items
         let sumNonOther = 0;
@@ -483,14 +495,14 @@ const Tasks = () => {
         task_type: formData.task_type?.id || formData.task_type || null,
         vendor: formData.vendor?.id || formData.vendor || null,
         due_date: formData.due_date || null,
-        estimated_price: formData.estimated_price ? parseInt(removeDots(formData.estimated_price)) : null,
-        final_price: formData.final_price ? parseInt(removeDots(formData.final_price)) : null,
+        estimated_price: formData.estimated_price ? parseInt(removeDots(String(formData.estimated_price))) : null,
+        final_price: formData.final_price ? parseInt(removeDots(String(formData.final_price))) : null,
         vat_refund_claimed: formData.vat_refund_claimed,
       };
 
       let taskId;
       if (editing) {
-        await axios.put(`/api/tasks/${editing.id}/`, submitData);
+        await axios.patch(`/api/tasks/${editing.id}/`, submitData);
         taskId = editing.id;
         showNotification('Task updated successfully', 'success');
       } else {
@@ -657,15 +669,6 @@ const Tasks = () => {
                   ))}
                 </Select>
               </FormControl>
-              
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={() => handleOpen()}
-                sx={{ mt: 1 }}
-              >
-                New Task
-              </Button>
             </Box>
           )}
 
@@ -1006,8 +1009,8 @@ const Tasks = () => {
                       ))}
                     </Box>
                   )}
-                  {selectedTask.vendor && (
-                    <DetailField label="VENDOR" value={selectedTask.vendor.name} />
+                  {selectedTask.vendor_details && (
+                    <DetailField label="VENDOR" value={selectedTask.vendor_details.name} />
                   )}
                   <DetailField
                     label="ESTIMATED COST"
@@ -1244,7 +1247,7 @@ const Tasks = () => {
               label="Vendor"
             >
               <MenuItem value="">None</MenuItem>
-              {vendors.map(vendor => (
+              {selectableVendors.map(vendor => (
                 <MenuItem key={vendor.id} value={vendor.id}>
                   {vendor.name}
                 </MenuItem>

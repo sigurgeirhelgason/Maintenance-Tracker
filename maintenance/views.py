@@ -23,6 +23,36 @@ from .services.import_service import DatapackImporter
 from .services.permission_service import get_shareable_users, can_read, can_write
 from .services.postal_code_service import get_city_from_postal_code
 
+class OwnerPermissionMixin:
+    """
+    Mixin that enforces owner-or-write-share permission on update and destroy.
+    Subclasses must set `owner_resource_type` (e.g. 'properties', 'tasks').
+    Override `get_object_owner(obj)` if the owner field is not `obj.user`.
+    """
+    owner_resource_type = None  # e.g. 'properties', 'tasks', 'vendors', 'areas', 'attachments'
+
+    def get_object_owner(self, obj):
+        """Return the User who owns the object. Override for non-standard owner fields."""
+        return obj.user
+
+    def perform_update(self, serializer):
+        obj = self.get_object()
+        owner = self.get_object_owner(obj)
+        if owner != self.request.user and not can_write(self.request.user, owner, self.owner_resource_type):
+            raise PermissionDenied(
+                f"You do not have permission to update this {self.owner_resource_type.rstrip('s')}."
+            )
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        owner = self.get_object_owner(instance)
+        if owner != self.request.user and not can_write(self.request.user, owner, self.owner_resource_type):
+            raise PermissionDenied(
+                f"You do not have permission to delete this {self.owner_resource_type.rstrip('s')}."
+            )
+        instance.delete()
+
+
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def lookup_postal_code(request):
@@ -43,11 +73,12 @@ def lookup_postal_code(request):
         'city': city
     }, status=status.HTTP_200_OK)
 
-class PropertyViewSet(viewsets.ModelViewSet):
+class PropertyViewSet(OwnerPermissionMixin, viewsets.ModelViewSet):
     serializer_class = PropertySerializer
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     ordering_fields = ['name', 'created_at']
     permission_classes = [IsAuthenticated]
+    owner_resource_type = 'properties'
 
     def get_queryset(self):
         # Return properties for the current user and shared properties, with all
@@ -85,26 +116,17 @@ class PropertyViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         # Automatically set the current user
         serializer.save(user=self.request.user)
-    
-    def perform_update(self, serializer):
-        # Check write permission for shared data
-        obj = self.get_object()
-        if obj.user != self.request.user and not can_write(self.request.user, obj.user, 'properties'):
-            raise PermissionDenied("You do not have permission to update this property.")
-        serializer.save()
-    
-    def perform_destroy(self, instance):
-        # Check write permission for shared data
-        if instance.user != self.request.user and not can_write(self.request.user, instance.user, 'properties'):
-            raise PermissionDenied("You do not have permission to delete this property.")
-        instance.delete()
 
-class AreaViewSet(viewsets.ModelViewSet):
+class AreaViewSet(OwnerPermissionMixin, viewsets.ModelViewSet):
     serializer_class = AreaSerializer
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_fields = ['property']
     ordering_fields = ['name', 'created_at']
     permission_classes = [IsAuthenticated]
+    owner_resource_type = 'areas'
+
+    def get_object_owner(self, obj):
+        return obj.property.user
 
     def get_queryset(self):
         # Return areas for properties of current user and shared properties
@@ -119,19 +141,6 @@ class AreaViewSet(viewsets.ModelViewSet):
         if property_obj.user != self.request.user and not can_write(self.request.user, property_obj.user, 'areas'):
             raise PermissionDenied("You do not have permission to add areas to this property.")
         serializer.save()
-
-    def perform_update(self, serializer):
-        # Check write permission for shared data
-        obj = self.get_object()
-        if obj.property.user != self.request.user and not can_write(self.request.user, obj.property.user, 'areas'):
-            raise PermissionDenied("You do not have permission to update this area.")
-        serializer.save()
-    
-    def perform_destroy(self, instance):
-        # Check write permission for shared data
-        if instance.property.user != self.request.user and not can_write(self.request.user, instance.property.user, 'areas'):
-            raise PermissionDenied("You do not have permission to delete this area.")
-        instance.delete()
 
 class TaskTypeViewSet(viewsets.ModelViewSet):
     queryset = TaskType.objects.all()
@@ -190,28 +199,43 @@ class VendorViewSet(viewsets.ModelViewSet):
         is_global = self.request.data.get('is_global', False)
         if is_global and not self.request.user.is_staff:
             raise PermissionDenied("Only admin users can create global vendors.")
-        
-        # Automatically set the current user
-        serializer.save(user=self.request.user)
-    
+
+        # is_global and is_premium are read_only on the serializer; pass them
+        # explicitly here so that admins can set them at creation time.
+        save_kwargs = {'user': self.request.user}
+        if self.request.user.is_staff:
+            save_kwargs['is_global'] = bool(is_global)
+            is_premium = self.request.data.get('is_premium', False)
+            save_kwargs['is_premium'] = bool(is_premium)
+
+        serializer.save(**save_kwargs)
+
     def perform_update(self, serializer):
         obj = self.get_object()
-        
+
         # Global vendors: only admins can modify
         if obj.is_global and not self.request.user.is_staff:
             raise PermissionDenied("You do not have permission to update global vendors.")
-        
+
         # Prevent non-admins from setting is_global=True on personal vendors
         is_global = self.request.data.get('is_global', obj.is_global)
         if is_global and not obj.is_global and not self.request.user.is_staff:
             raise PermissionDenied("Only admin users can create global vendors.")
-        
+
         # For personal vendors: check if user is owner or has write permission via sharing
         if obj.user and obj.user.id != self.request.user.id:
             if not can_write(self.request.user, obj.user, 'vendors'):
                 raise PermissionDenied("You do not have permission to update this vendor.")
-        
-        serializer.save()
+
+        # is_global and is_premium are read_only on the serializer; pass them
+        # explicitly here so that admins can update them.
+        save_kwargs = {}
+        if self.request.user.is_staff:
+            save_kwargs['is_global'] = bool(is_global)
+            is_premium = self.request.data.get('is_premium', obj.is_premium)
+            save_kwargs['is_premium'] = bool(is_premium)
+
+        serializer.save(**save_kwargs)
     
     def perform_destroy(self, instance):
         # Global vendors: only admins can delete
@@ -225,30 +249,31 @@ class VendorViewSet(viewsets.ModelViewSet):
         
         instance.delete()
     
+    def _toggle_preference(self, request, pk, field_name):
+        """
+        Toggle a boolean preference field (is_favorite or is_saved) on the
+        UserVendorPreference record for the requesting user and the given vendor.
+        """
+        vendor = self.get_object()
+        pref, _created = UserVendorPreference.objects.get_or_create(
+            user=request.user,
+            vendor=vendor,
+        )
+        setattr(pref, field_name, not getattr(pref, field_name))
+        pref.save()
+        return pref, vendor
+
     @action(detail=True, methods=['post'])
     def toggle_favorite(self, request, pk=None):
         """
         Toggle the favorite status of a vendor for the current user.
         This works for both personal and global vendors.
         """
-        from .models import UserVendorPreference
-        
-        vendor = self.get_object()
-        
-        # Get or create preference record
-        pref, created = UserVendorPreference.objects.get_or_create(
-            user=request.user,
-            vendor=vendor
-        )
-        
-        # Toggle the favorite status
-        pref.is_favorite = not pref.is_favorite
-        pref.save()
-        
+        pref, vendor = self._toggle_preference(request, pk, 'is_favorite')
         serializer = self.get_serializer(vendor)
         return Response(
             {"detail": f"Vendor {'added to' if pref.is_favorite else 'removed from'} favorites", **serializer.data},
-            status=status.HTTP_200_OK
+            status=status.HTTP_200_OK,
         )
 
     @action(detail=True, methods=['post'])
@@ -257,32 +282,20 @@ class VendorViewSet(viewsets.ModelViewSet):
         Toggle the saved status of a vendor for the current user.
         Saved vendors appear in My Vendors tab as references to global vendors.
         """
-        from .models import UserVendorPreference
-        
-        vendor = self.get_object()
-        
-        # Get or create preference record
-        pref, created = UserVendorPreference.objects.get_or_create(
-            user=request.user,
-            vendor=vendor
-        )
-        
-        # Toggle the saved status
-        pref.is_saved = not pref.is_saved
-        pref.save()
-        
+        pref, vendor = self._toggle_preference(request, pk, 'is_saved')
         serializer = self.get_serializer(vendor)
         return Response(
             {"detail": f"Vendor {'saved to' if pref.is_saved else 'removed from'} My Vendors", **serializer.data},
-            status=status.HTTP_200_OK
+            status=status.HTTP_200_OK,
         )
 
-class MaintenanceTaskViewSet(viewsets.ModelViewSet):
+class MaintenanceTaskViewSet(OwnerPermissionMixin, viewsets.ModelViewSet):
     serializer_class = MaintenanceTaskSerializer
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_fields = ['property', 'status', 'task_type', 'vendor']
     ordering_fields = ['created_date', 'created_at']
     permission_classes = [IsAuthenticated]
+    owner_resource_type = 'tasks'
 
     def get_queryset(self):
         # Return tasks for current user and shared tasks
@@ -291,28 +304,19 @@ class MaintenanceTaskViewSet(viewsets.ModelViewSet):
         return MaintenanceTask.objects.filter(Q(user=user) | Q(user__in=shared_users))
 
     def perform_create(self, serializer):
-        # Automatically set the current user
+        property_obj = serializer.validated_data.get('property')
+        if property_obj and property_obj.user != self.request.user:
+            if not can_write(self.request.user, property_obj.user, 'tasks'):
+                raise PermissionDenied("You do not have permission to add tasks to this property.")
         serializer.save(user=self.request.user)
-    
-    def perform_update(self, serializer):
-        # Check write permission for shared data
-        obj = self.get_object()
-        if obj.user != self.request.user and not can_write(self.request.user, obj.user, 'tasks'):
-            raise PermissionDenied("You do not have permission to update this task.")
-        serializer.save()
-    
-    def perform_destroy(self, instance):
-        # Check write permission for shared data
-        if instance.user != self.request.user and not can_write(self.request.user, instance.user, 'tasks'):
-            raise PermissionDenied("You do not have permission to delete this task.")
-        instance.delete()
 
-class AttachmentViewSet(viewsets.ModelViewSet):
+class AttachmentViewSet(OwnerPermissionMixin, viewsets.ModelViewSet):
     serializer_class = AttachmentSerializer
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_fields = ['task']
     ordering_fields = ['uploaded_at']
     permission_classes = [IsAuthenticated]
+    owner_resource_type = 'attachments'
 
     def get_queryset(self):
         # Return attachments for current user and shared attachments
@@ -323,19 +327,6 @@ class AttachmentViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         # Automatically set the current user
         serializer.save(user=self.request.user)
-    
-    def perform_update(self, serializer):
-        # Check write permission for shared data
-        obj = self.get_object()
-        if obj.user != self.request.user and not can_write(self.request.user, obj.user, 'attachments'):
-            raise PermissionDenied("You do not have permission to update this attachment.")
-        serializer.save()
-    
-    def perform_destroy(self, instance):
-        # Check write permission for shared data
-        if instance.user != self.request.user and not can_write(self.request.user, instance.user, 'attachments'):
-            raise PermissionDenied("You do not have permission to delete this attachment.")
-        instance.delete()
 
 
 class DataShareViewSet(viewsets.ModelViewSet):
@@ -350,9 +341,7 @@ class DataShareViewSet(viewsets.ModelViewSet):
     def get_serializer_class(self):
         """Use different serializers for different actions"""
         if self.action in ['create', 'update', 'partial_update']:
-            from .serializers import CreateDataShareSerializer
             return CreateDataShareSerializer
-        from .serializers import DataShareSerializer
         return DataShareSerializer
     
     def get_queryset(self):
@@ -373,7 +362,6 @@ class DataShareViewSet(viewsets.ModelViewSet):
         
         # Get the created instance and serialize it with DataShareSerializer
         instance = serializer.instance
-        from .serializers import DataShareSerializer
         output_serializer = DataShareSerializer(instance)
         return Response(output_serializer.data, status=status.HTTP_201_CREATED, headers=headers)
     
