@@ -17,8 +17,8 @@ const Register = () => {
   const navigate = useNavigate();
   const { register, error, loading: authLoading } = useAuth();
   const [formData, setFormData] = useState({
-    username: '',
     email: '',
+    name: '',
     password: '',
     password2: '',
   });
@@ -38,8 +38,8 @@ const Register = () => {
     e.preventDefault();
 
     // Validation
-    if (!formData.username || !formData.email || !formData.password || !formData.password2) {
-      setLocalError('Please fill in all fields');
+    if (!formData.email || !formData.password || !formData.password2) {
+      setLocalError('Please fill in all required fields');
       return;
     }
 
@@ -55,8 +55,13 @@ const Register = () => {
 
     try {
       setLoading(true);
-      await register(formData.username, formData.email, formData.password, formData.password2);
-      // After registration, redirect to login or directly to dashboard
+      await register({
+        email: formData.email,
+        name: formData.name,
+        password: formData.password,
+        password2: formData.password2,
+      });
+      // After registration, redirect to login
       navigate('/login');
     } catch (err) {
       setLocalError(error || 'Registration failed');
@@ -94,18 +99,7 @@ const Register = () => {
             <form onSubmit={handleSubmit}>
               <TextField
                 fullWidth
-                label="Username"
-                name="username"
-                type="text"
-                value={formData.username}
-                onChange={handleChange}
-                margin="normal"
-                disabled={loading || authLoading}
-              />
-
-              <TextField
-                fullWidth
-                label="Email"
+                label="Email *"
                 name="email"
                 type="email"
                 value={formData.email}
@@ -116,7 +110,18 @@ const Register = () => {
 
               <TextField
                 fullWidth
-                label="Password"
+                label="Name"
+                name="name"
+                type="text"
+                value={formData.name}
+                onChange={handleChange}
+                margin="normal"
+                disabled={loading || authLoading}
+              />
+
+              <TextField
+                fullWidth
+                label="Password *"
                 name="password"
                 type="password"
                 value={formData.password}
@@ -127,7 +132,7 @@ const Register = () => {
 
               <TextField
                 fullWidth
-                label="Confirm Password"
+                label="Confirm Password *"
                 name="password2"
                 type="password"
                 value={formData.password2}

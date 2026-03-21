@@ -64,3 +64,8 @@ ehthumbs.db
 node_modules/
 npm-debug.log*
 yarn-error.log*
+.claude/commands/tester.md
+
+# AI models and outputs
+.claude/
+.mcp.json

@@ -43,37 +43,36 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const register = async (username, email, password, password2) => {
+  const register = async (formData) => {
     try {
       setError(null);
-      const response = await axios.post('/api/register/', {
-        username,
-        email,
-        password,
-        password2,
+      const response = await axios.post('/api/auth/register/', {
+        email: formData.email,
+        name: formData.name,
+        password: formData.password,
+        password2: formData.password2,
       });
-      setUser(response.data);
       return response.data;
     } catch (err) {
-      const errorMsg = err.response?.data?.username?.[0] || 
-                       err.response?.data?.email?.[0] ||
+      const errorMsg = err.response?.data?.email?.[0] || 
                        err.response?.data?.password?.[0] ||
+                       err.response?.data?.non_field_errors?.[0] ||
                        'Registration failed';
       setError(errorMsg);
       throw err;
     }
   };
 
-  const login = async (username, password) => {
+  const login = async (email, password) => {
     try {
       setError(null);
-      // Get JWT token
-      const tokenResponse = await axios.post('/api/token/', {
-        username,
+      // Get JWT token using email
+      const tokenResponse = await axios.post('/api/auth/login/', {
+        email,
         password,
       });
 
-      const { access, refresh } = tokenResponse.data;
+      const { access, refresh, user } = tokenResponse.data;
 
       // Store tokens
       localStorage.setItem('access_token', access);
@@ -82,13 +81,15 @@ export const AuthProvider = ({ children }) => {
       // Set axios default header
       axios.defaults.headers.common['Authorization'] = `Bearer ${access}`;
 
-      // Get user info
-      const userResponse = await axios.get('/api/user/me/');
-      setUser(userResponse.data);
+      // Set user from response
+      setUser(user);
 
-      return userResponse.data;
+      return user;
     } catch (err) {
-      const errorMsg = err.response?.data?.detail || 'Login failed';
+      const errorMsg = err.response?.data?.email?.[0] ||
+                       err.response?.data?.password?.[0] ||
+                       err.response?.data?.detail || 
+                       'Login failed';
       setError(errorMsg);
       throw err;
     }

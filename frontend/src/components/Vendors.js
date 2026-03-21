@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
+import { useLocation } from 'react-router-dom';
 import {
   Box,
   Card,
@@ -35,11 +36,14 @@ import {
   MenuItem,
   OutlinedInput,
 } from '@mui/material';
-import { Edit as EditIcon, Delete as DeleteIcon, Add as AddIcon, Phone as PhoneIcon, Email as EmailIcon, Star as StarIcon, StarBorder as StarBorderIcon, Search as SearchIcon, ArrowUpward as ArrowUpIcon, ArrowDownward as ArrowDownIcon, Favorite as FavoriteIcon, FavoriteBorder as FavoriteBorderIcon, Visibility as VisibilityIcon } from '@mui/icons-material';
+import { Edit as EditIcon, Delete as DeleteIcon, Add as AddIcon, Phone as PhoneIcon, Email as EmailIcon, Star as StarIcon, StarBorder as StarBorderIcon, Search as SearchIcon, ArrowUpward as ArrowUpIcon, ArrowDownward as ArrowDownIcon, Visibility as VisibilityIcon, Download as DownloadIcon } from '@mui/icons-material';
 import PageHeader from './Layout/PageHeader';
 import VendorDetailModal from './VendorDetailModal';
+import { AuthContext } from '../AuthContext';
 
-const Vendors = () => {
+const Vendors = ({ initialTab = 'personal' }) => {
+  const location = useLocation();
+  const { user: authUser } = React.useContext(AuthContext);
   const [vendors, setVendors] = useState([]);
   const [taskTypes, setTaskTypes] = useState([]);
   const [selectedVendor, setSelectedVendor] = useState(null);
@@ -64,6 +68,7 @@ const Vendors = () => {
   const [sortDirection, setSortDirection] = useState('asc');
   const [taskTypeFilter, setTaskTypeFilter] = useState(null);
   const [favoriteFilter, setFavoriteFilter] = useState(false);
+  const [viewTab, setViewTab] = useState('personal');
   const [formData, setFormData] = useState({
     name: '',
     contact_person: '',
@@ -71,9 +76,18 @@ const Vendors = () => {
     email: '',
     address: '',
     favorite: false,
-    task_type: null,
-    secondary_task_types: [],
+    speciality: null,
+    secondary_specialities: [],
   });
+
+  useEffect(() => {
+    // Update viewTab when URL location changes
+    if (location.pathname.includes('/vendors/global')) {
+      setViewTab('global');
+    } else {
+      setViewTab('personal');
+    }
+  }, [location.pathname]);
 
   useEffect(() => {
     fetch();
@@ -125,12 +139,12 @@ const Vendors = () => {
       setEditing(vendor);
       setFormData({
         ...vendor,
-        task_type: (typeof vendor.task_type === 'object' ? vendor.task_type?.id : vendor.task_type) || null,
-        secondary_task_types: (vendor.secondary_task_types_details || vendor.secondary_task_types || []).map(t => (typeof t === 'object' ? t.id : t)) || [],
+        speciality: (typeof vendor.speciality === 'object' ? vendor.speciality?.id : vendor.speciality) || null,
+        secondary_specialities: (vendor.secondary_specialities_details || vendor.secondary_specialities || []).map(t => (typeof t === 'object' ? t.id : t)) || [],
       });
     } else {
       setEditing(null);
-      setFormData({ name: '', contact_person: '', phone: '', email: '', address: '', favorite: false, task_type: null, secondary_task_types: [] });
+      setFormData({ name: '', contact_person: '', phone: '', email: '', address: '', postal_code: '', city: '', favorite: false, speciality: null, secondary_specialities: [] });
     }
     setOpen(true);
   };
@@ -158,7 +172,7 @@ const Vendors = () => {
     try {
       const submitData = {
         ...formData,
-        secondary_task_types: formData.secondary_task_types.filter(id => id !== null && id !== undefined),
+        secondary_specialities: formData.secondary_specialities.filter(id => id !== null && id !== undefined),
       };
 
       if (editing) {
@@ -194,16 +208,38 @@ const Vendors = () => {
 
   const toggleFavorite = async (vendor) => {
     try {
-      await axios.patch(`/api/vendors/${vendor.id}/`, { favorite: !vendor.favorite });
-      await fetch();
-      // Update selectedVendor to reflect the new favorite status
-      setSelectedVendor(prev => prev ? { ...prev, favorite: !prev.favorite } : null);
-      showNotification(
-        vendor.favorite ? 'Vendor removed from favorites' : 'Vendor added to favorites',
-        'success'
-      );
+      // Optimistically update local state
+      const newFavoriteStatus = !vendor.favorite;
+      setVendors(prev => prev.map(v => v.id === vendor.id ? { ...v, favorite: newFavoriteStatus } : v));
+      setSelectedVendor(prev => prev?.id === vendor.id ? { ...prev, favorite: newFavoriteStatus } : prev);
+      
+      // Make API call in background
+      const response = await axios.post(`/api/vendors/${vendor.id}/toggle_favorite/`);
+      showNotification(response.data.detail, 'success');
     } catch (err) {
       console.error('Error updating favorite:', err);
+      // Rollback on error
+      setVendors(prev => prev.map(v => v.id === vendor.id ? { ...v, favorite: !vendor.favorite } : v));
+      setSelectedVendor(prev => prev?.id === vendor.id ? { ...prev, favorite: !vendor.favorite } : prev);
+      showNotification('Error updating vendor', 'error');
+    }
+  };
+
+  const toggleSaved = async (vendor) => {
+    try {
+      // Optimistically update local state
+      const newSavedStatus = !vendor.saved;
+      setVendors(prev => prev.map(v => v.id === vendor.id ? { ...v, saved: newSavedStatus } : v));
+      setSelectedVendor(prev => prev?.id === vendor.id ? { ...prev, saved: newSavedStatus } : prev);
+      
+      // Make API call in background
+      const response = await axios.post(`/api/vendors/${vendor.id}/toggle_saved/`);
+      showNotification(response.data.detail, 'success');
+    } catch (err) {
+      console.error('Error updating saved status:', err);
+      // Rollback on error
+      setVendors(prev => prev.map(v => v.id === vendor.id ? { ...v, saved: !vendor.saved } : v));
+      setSelectedVendor(prev => prev?.id === vendor.id ? { ...prev, saved: !vendor.saved } : prev);
       showNotification('Error updating vendor', 'error');
     }
   };
@@ -217,17 +253,43 @@ const Vendors = () => {
     }
   };
 
+  // Calculate vendor counts for tab labels
+  const personalVendorsCount = useMemo(() => {
+    const personalVendors = vendors.filter(v => !v.is_global);
+    const savedGlobals = vendors.filter(v => v.is_global && v.saved);
+    return personalVendors.length + savedGlobals.length;
+  }, [vendors]);
+
+  const globalVendorsCount = useMemo(() => {
+    return vendors.filter(v => v.is_global).length;
+  }, [vendors]);
+
   const filteredAndSortedVendors = useMemo(() => {
-    let result = vendors.filter(vendor => {
+    // Separate personal and global vendors
+    const personalVendors = vendors.filter(v => !v.is_global);
+    // In "My Vendors" tab: show personal vendors + saved global vendors
+    const myVendors = [
+      ...personalVendors,
+      ...vendors.filter(v => v.is_global && v.saved)
+    ];
+    // In "Global Vendors" tab: show ALL global vendors
+    const globalVendors = vendors.filter(v => v.is_global);
+    
+    // Choose which list to filter based on current tab
+    const vendorsToFilter = viewTab === 'personal' ? myVendors : globalVendors;
+    
+    let result = vendorsToFilter.filter(vendor => {
       const matchesSearch = vendor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         vendor.contact_person?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         vendor.phone?.includes(searchTerm) ||
         vendor.email?.toLowerCase().includes(searchTerm.toLowerCase());
       
       const matchesTaskType = !taskTypeFilter || 
-        vendor.task_type?.id === parseInt(taskTypeFilter) ||
-        vendor.secondary_task_types_details?.some(type => type.id === parseInt(taskTypeFilter));
-      const matchesFavorite = !favoriteFilter || vendor.favorite;
+        vendor.speciality?.id === parseInt(taskTypeFilter) ||
+        vendor.secondary_specialities_details?.some(type => type.id === parseInt(taskTypeFilter));
+      
+      // Only apply favorite filter to personal vendors tab
+      const matchesFavorite = viewTab === 'global' ? true : (!favoriteFilter || vendor.favorite);
       
       return matchesSearch && matchesTaskType && matchesFavorite;
     });
@@ -249,7 +311,7 @@ const Vendors = () => {
     });
 
     return result;
-  }, [vendors, searchTerm, sortBy, sortDirection, taskTypeFilter, favoriteFilter]);
+  }, [vendors, searchTerm, sortBy, sortDirection, taskTypeFilter, favoriteFilter, viewTab]);
 
   if (loading) {
     return (
@@ -259,20 +321,27 @@ const Vendors = () => {
     );
   }
 
-  const favoriteVendors = vendors.filter(v => v.favorite);
+  const favoriteVendors = vendors.filter(v => v.favorite && !v.is_global);
+  const personalVendors = vendors.filter(v => !v.is_global);
+  const globalVendors = vendors.filter(v => v.is_global);
   const allVendors = vendors;
 
   return (
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 4 }}>
         <PageHeader
-          title="Vendors"
-          subtitle="Manage contractors and vendors"
-          breadcrumbs={[{ label: 'Home', path: '/' }, { label: 'Vendors' }]}
+          title={viewTab === 'personal' ? 'My Vendors' : 'Global Vendors'}
+          subtitle={viewTab === 'personal' ? 'Your personal vendor collection' : 'Available contractors and vendors'}
+          breadcrumbs={[
+            { label: 'Home', path: '/' }, 
+            { label: 'Vendors', path: '/vendors' }
+          ]}
         />
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpen()} sx={{ mt: 1 }}>
-          New Vendor
-        </Button>
+        {viewTab === 'personal' && (
+          <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpen()} sx={{ mt: 1 }}>
+            New Vendor
+          </Button>
+        )}
       </Box>
 
       {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
@@ -346,7 +415,7 @@ const Vendors = () => {
             </Box>
           )}
 
-          {/* All Vendors Section */}
+          {/* Personal vs Global Vendors Section */}
           <Box sx={{ mt: 4 }}>
             {/* Search and Filter Bar */}
             <Paper sx={{ p: 2, mb: 3 }}>
@@ -377,16 +446,18 @@ const Vendors = () => {
                     ))}
                   </Select>
                 </FormControl>
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      size="small"
-                      checked={favoriteFilter}
-                      onChange={(e) => setFavoriteFilter(e.target.checked)}
-                    />
-                  }
-                  label="Favorites Only"
-                />
+                {viewTab === 'personal' && (
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        size="small"
+                        checked={favoriteFilter}
+                        onChange={(e) => setFavoriteFilter(e.target.checked)}
+                      />
+                    }
+                    label="Favorites Only"
+                  />
+                )}
                 {(searchTerm || taskTypeFilter || favoriteFilter) && (
                   <Button
                     size="small"
@@ -409,6 +480,7 @@ const Vendors = () => {
                   <TableHead sx={{ bgcolor: '#F5F5F5' }}>
                     <TableRow>
                       <TableCell sx={{ fontWeight: 700, minWidth: 40 }}>Favorite</TableCell>
+                      <TableCell sx={{ fontWeight: 700, minWidth: 80, textAlign: 'center' }}>Save</TableCell>
                       <TableCell
                         sx={{ fontWeight: 700, minWidth: 200, cursor: 'pointer', userSelect: 'none' }}
                         onClick={() => handleSortClick('name')}
@@ -429,7 +501,7 @@ const Vendors = () => {
                         </Box>
                       </TableCell>
                       <TableCell sx={{ fontWeight: 700, minWidth: 120 }}>Phone</TableCell>
-                      <TableCell sx={{ fontWeight: 700, minWidth: 150 }}>Email</TableCell>
+                      <TableCell sx={{ fontWeight: 700, minWidth: 100 }}>Email</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -440,8 +512,9 @@ const Vendors = () => {
                           onClick={() => handleDetailModalOpen(vendor)}
                           sx={{
                             cursor: 'pointer',
+                            bgcolor: vendor.is_global ? '#f5f5f5' : 'inherit',
                             '&:hover': {
-                              bgcolor: '#F5F5F5',
+                              bgcolor: vendor.is_global ? '#eeeeee' : '#F5F5F5',
                             },
                           }}
                         >
@@ -450,16 +523,29 @@ const Vendors = () => {
                               size="small"
                               onClick={(e) => { e.stopPropagation(); toggleFavorite(vendor); }}
                               sx={{ color: vendor.favorite ? '#ffc107' : '#bdbdbd', padding: '4px' }}
+                              title="Add to favorites"
                             >
                               {vendor.favorite ? <StarIcon sx={{ fontSize: 18 }} /> : <StarBorderIcon sx={{ fontSize: 18 }} />}
                             </IconButton>
                           </TableCell>
-                          <TableCell sx={{ fontWeight: 500, fontSize: '0.95rem' }}>
+                          <TableCell sx={{ fontSize: '0.9rem', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                            {vendor.is_global && (
+                              <IconButton
+                                size="small"
+                                onClick={() => toggleSaved(vendor)}
+                                sx={{ color: vendor.saved ? '#2196f3' : '#bdbdbd', padding: '4px' }}
+                                title={vendor.saved ? 'Remove from My Vendors' : 'Save to My Vendors'}
+                              >
+                                {vendor.saved ? <DownloadIcon sx={{ fontSize: 18 }} /> : <DownloadIcon sx={{ fontSize: 18, opacity: 0.5 }} />}
+                              </IconButton>
+                            )}
+                          </TableCell>
+                          <TableCell sx={{ fontWeight: vendor.is_premium ? 700 : 500, fontSize: '0.95rem' }}>
                             {vendor.name}
                           </TableCell>
                           <TableCell sx={{ fontSize: '0.9rem' }}>
-                            {vendor.task_type_details ? (
-                              <Chip label={vendor.task_type_details.name} size="small" color="primary" variant="outlined" />
+                            {vendor.speciality_details ? (
+                              <Chip label={vendor.speciality_details.name} size="small" color="primary" variant="outlined" />
                             ) : (
                               '-'
                             )}
@@ -477,9 +563,9 @@ const Vendors = () => {
                       ))
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={6} sx={{ textAlign: 'center', py: 3 }}>
+                        <TableCell colSpan={viewTab === 'personal' ? 7 : 7} sx={{ textAlign: 'center', py: 3 }}>
                           <Typography color="textSecondary">
-                            {searchTerm || taskTypeFilter ? 'No vendors match your filters' : 'No vendors to display'}
+                            {searchTerm || taskTypeFilter ? 'No vendors match your filters' : `No ${viewTab === 'personal' ? 'vendors in your collection' : 'global vendors to explore'}`}
                           </Typography>
                         </TableCell>
                       </TableRow>
@@ -498,9 +584,9 @@ const Vendors = () => {
           <IconButton
             size="small"
             onClick={() => setFormData(prev => ({ ...prev, favorite: !prev.favorite }))}
-            sx={{ color: formData.favorite ? '#e91e63' : '#bdbdbd' }}
+            sx={{ color: formData.favorite ? '#ffc107' : '#bdbdbd' }}
           >
-            {formData.favorite ? <FavoriteIcon /> : <FavoriteBorderIcon />}
+            {formData.favorite ? <StarIcon /> : <StarBorderIcon />}
           </IconButton>
         </DialogTitle>
         <DialogContent sx={{ pt: 3 }}>
@@ -509,26 +595,52 @@ const Vendors = () => {
           <TextField margin="dense" label="Phone" name="phone" fullWidth value={formData.phone} onChange={handleChange} variant="outlined" sx={{ mb: 2 }} />
           <TextField margin="dense" label="Email" name="email" type="email" fullWidth value={formData.email} onChange={handleChange} variant="outlined" sx={{ mb: 2 }} />
           <TextField margin="dense" label="Address" name="address" fullWidth value={formData.address} onChange={handleChange} variant="outlined" sx={{ mb: 2 }} />
+          <TextField 
+            margin="dense" 
+            label="Postal Code" 
+            name="postal_code" 
+            fullWidth 
+            value={formData.postal_code} 
+            onChange={(e) => {
+              const postal_code = e.target.value;
+              setFormData(prev => ({ ...prev, postal_code }));
+              
+              // Auto-fill city if postal code is entered
+              if (postal_code.length >= 2) {
+                axios.get(`/api/postal-code/lookup/?postal_code=${postal_code}`)
+                  .then(res => {
+                    if (res.data.city) {
+                      setFormData(prev => ({ ...prev, city: res.data.city }));
+                    }
+                  })
+                  .catch(err => console.error('Error looking up postal code:', err));
+              }
+            }}
+            variant="outlined" 
+            sx={{ mb: 2 }} 
+            placeholder="e.g., 101"
+          />
+          <TextField margin="dense" label="City" name="city" fullWidth value={formData.city} onChange={handleChange} variant="outlined" sx={{ mb: 2 }} />
           <FormControl fullWidth sx={{ mb: 2 }}>
-            <InputLabel>Main Task Type</InputLabel>
+            <InputLabel>Main Speciality</InputLabel>
             <Select
-              value={formData.task_type || ''}
+              value={formData.speciality || ''}
               onChange={(e) => {
-                const newTaskType = e.target.value || null;
+                const newSpeciality = e.target.value || null;
                 setFormData(prev => {
-                  let newSecondary = [...prev.secondary_task_types];
-                  // If a main task type is selected, add it to secondary if not already there
-                  if (newTaskType && !newSecondary.includes(newTaskType)) {
-                    newSecondary.push(newTaskType);
+                  let newSecondary = [...prev.secondary_specialities];
+                  // If a main speciality is selected, add it to secondary if not already there
+                  if (newSpeciality && !newSecondary.includes(newSpeciality)) {
+                    newSecondary.push(newSpeciality);
                   }
                   return { 
                     ...prev, 
-                    task_type: newTaskType,
-                    secondary_task_types: newSecondary
+                    speciality: newSpeciality,
+                    secondary_specialities: newSecondary
                   };
                 });
               }}
-              label="Main Task Type"
+              label="Main Speciality"
             >
               <MenuItem value="">None</MenuItem>
               {taskTypes.map((type) => (
@@ -538,20 +650,20 @@ const Vendors = () => {
               ))}
             </Select>
           </FormControl>
-          <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>Secondary Task Types</Typography>
+          <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>Secondary Specialities</Typography>
           <FormGroup sx={{ mb: 2, pl: 1 }}>
             {taskTypes.map((type) => (
               <FormControlLabel
                 key={type.id}
                 control={
                   <Checkbox
-                    checked={formData.secondary_task_types.includes(type.id)}
+                    checked={formData.secondary_specialities.includes(type.id)}
                     onChange={(e) => {
                       setFormData(prev => ({
                         ...prev,
-                        secondary_task_types: e.target.checked
-                          ? [...prev.secondary_task_types, type.id]
-                          : prev.secondary_task_types.filter(id => id !== type.id)
+                        secondary_specialities: e.target.checked
+                          ? [...prev.secondary_specialities, type.id]
+                          : prev.secondary_specialities.filter(id => id !== type.id)
                       }));
                     }}
                   />
@@ -586,6 +698,8 @@ const Vendors = () => {
         onClose={handleDetailModalClose}
         onEdit={() => { handleDetailModalClose(); handleOpen(selectedVendor); }}
         onToggleFavorite={toggleFavorite}
+        onToggleSaved={toggleSaved}
+        isAdmin={authUser?.is_staff}
       />
 
       {/* Notification Snackbar */}

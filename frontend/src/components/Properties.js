@@ -58,6 +58,8 @@ const Properties = () => {
   const [formData, setFormData] = useState({
     name: '',
     address: '',
+    postal_code: '',
+    city: '',
     num_floors: 1,
     has_garden: false,
     image: null,
@@ -233,6 +235,8 @@ const Properties = () => {
       setFormData({
         name: property.name,
         address: property.address,
+        postal_code: property.postal_code || '',
+        city: property.city || '',
         num_floors: property.num_floors || 1,
         has_garden: property.has_garden || false,
         image: property.image || null,
@@ -252,6 +256,8 @@ const Properties = () => {
       setFormData({
         name: property.name,
         address: property.address,
+        postal_code: property.postal_code || '',
+        city: property.city || '',
         num_floors: property.num_floors || 1,
         has_garden: property.has_garden || false,
         image: property.image || null,
@@ -269,6 +275,8 @@ const Properties = () => {
     setFormData({
       name: '',
       address: '',
+      postal_code: '',
+      city: '',
       num_floors: 1,
       has_garden: false,
       image: null,
@@ -509,6 +517,8 @@ const Properties = () => {
         propertyData = new FormData();
         propertyData.append('name', formData.name);
         propertyData.append('address', formData.address);
+        propertyData.append('postal_code', formData.postal_code);
+        propertyData.append('city', formData.city);
         propertyData.append('num_floors', formData.num_floors);
         propertyData.append('has_garden', formData.has_garden);
         propertyData.append('image', imageFile);
@@ -517,6 +527,8 @@ const Properties = () => {
         propertyData = {
           name: formData.name,
           address: formData.address,
+          postal_code: formData.postal_code,
+          city: formData.city,
           num_floors: formData.num_floors,
           has_garden: formData.has_garden,
         };
@@ -733,7 +745,18 @@ const Properties = () => {
                     >
                       {property.address}
                     </Typography>
-                    
+                    {(property.postal_code || property.city) && (
+                      <Typography 
+                        sx={{ 
+                          color: '#666', 
+                          fontWeight: 400,
+                          fontSize: '0.9rem', 
+                          mb: 3 
+                        }}
+                      >
+                        {[property.postal_code, property.city].filter(Boolean).join(', ')}
+                      </Typography>
+                    )}
                     {/* Inline Stats on the left */}
                     <Box sx={{ display: 'flex', gap: 4 }}>
                       <Box>
@@ -875,6 +898,42 @@ const Properties = () => {
             name="address"
             fullWidth
             value={formData.address}
+            onChange={handleInputChange}
+            variant="outlined"
+            sx={{ mb: 2 }}
+          />
+          <TextField
+            margin="dense"
+            label="Postal Code"
+            name="postal_code"
+            fullWidth
+            value={formData.postal_code}
+            onChange={(e) => {
+              const postal_code = e.target.value;
+              setFormData(prev => ({ ...prev, postal_code }));
+              
+              // Auto-fill city if postal code is entered
+              if (postal_code.length >= 2) {
+                fetch(`/api/postal-code/lookup/?postal_code=${postal_code}`)
+                  .then(res => res.json())
+                  .then(data => {
+                    if (data.city) {
+                      setFormData(prev => ({ ...prev, city: data.city }));
+                    }
+                  })
+                  .catch(err => console.error('Error looking up postal code:', err));
+              }
+            }}
+            variant="outlined"
+            sx={{ mb: 2 }}
+            placeholder="e.g., 101"
+          />
+          <TextField
+            margin="dense"
+            label="City"
+            name="city"
+            fullWidth
+            value={formData.city}
             onChange={handleInputChange}
             variant="outlined"
             sx={{ mb: 2 }}

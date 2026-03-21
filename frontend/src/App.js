@@ -17,6 +17,8 @@ import Tasks from './components/Tasks';
 import Vendors from './components/Vendors';
 import TaskTypes from './components/TaskTypes';
 import Reports from './components/Reports';
+import Settings from './components/Settings';
+import DataSharing from './components/DataSharing';
 import Login from './components/Login';
 import Register from './components/Register';
 
@@ -178,10 +180,13 @@ function AppContent() {
             <Route path="/properties" element={<Properties />} />
             <Route path="/areas" element={<Areas />} />
             <Route path="/tasks" element={<Tasks />} />
-            <Route path="/vendors" element={<Vendors />} />
+            <Route path="/vendors" element={<Vendors initialTab="personal" />} />
+            <Route path="/vendors/global" element={<Vendors initialTab="global" />} />
             <Route path="/tasktypes" element={<TaskTypes />} />
             <Route path="/reports" element={<Reports />} />
             <Route path="/reports/:reportType" element={<Reports />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="/data-sharing" element={<DataSharing />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Box>

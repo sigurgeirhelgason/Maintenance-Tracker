@@ -15,6 +15,8 @@ import {
   useMediaQuery,
   Button,
   Collapse,
+  Menu,
+  MenuItem,
 } from '@mui/material';
 import {
   Dashboard as DashboardIcon,
@@ -27,6 +29,7 @@ import {
   Menu as MenuIcon,
   Close as CloseIcon,
   Logout as LogoutIcon,
+  Settings as SettingsIcon,
   ExpandLess as ExpandLessIcon,
   ExpandMore as ExpandMoreIcon,
   Assessment as ReportsIcon,
@@ -37,6 +40,8 @@ import {
   DateRange as ScheduleIcon,
   AttachMoney as VATRefundIcon,
   BusinessCenter as VendorPerformanceIcon,
+  AccountCircle as AccountCircleIcon,
+  Share as ShareIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../../AuthContext';
 
@@ -48,6 +53,7 @@ const Sidebar = ({ open, setOpen }) => {
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const prevIsMobileRef = useRef(isMobile);
   const [expandedItems, setExpandedItems] = useState({});
+  const [userMenuAnchor, setUserMenuAnchor] = useState(null);
 
   // Auto-close mobile drawer only when transitioning from mobile to desktop
   useEffect(() => {
@@ -106,7 +112,10 @@ const Sidebar = ({ open, setOpen }) => {
       id: 'vendors',
       path: '/vendors', 
       label: 'Vendors', 
-      icon: VendorsIcon 
+      icon: VendorsIcon,
+      children: [
+        { path: '/vendors/global', label: 'Global Vendors', icon: VendorsIcon }
+      ]
     },
     { 
       id: 'reports',
@@ -149,16 +158,78 @@ const Sidebar = ({ open, setOpen }) => {
             Maintenance
           </Typography>
         </Box>
-        {isMobile && (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          {isMobile && (
+            <IconButton
+              onClick={() => setOpen(false)}
+              sx={{ color: 'white' }}
+              size="small"
+            >
+              <CloseIcon />
+            </IconButton>
+          )}
           <IconButton
-            onClick={() => setOpen(false)}
-            sx={{ color: 'white' }}
+            onClick={(e) => setUserMenuAnchor(e.currentTarget)}
+            sx={{
+              color: 'white',
+              '&:hover': {
+                backgroundColor: 'rgba(255, 255, 255, 0.1)',
+              },
+            }}
             size="small"
           >
-            <CloseIcon />
+            <AccountCircleIcon fontSize="large" />
           </IconButton>
-        )}
+        </Box>
       </Box>
+
+      {/* User Menu Dropdown */}
+      <Menu
+        anchorEl={userMenuAnchor}
+        open={Boolean(userMenuAnchor)}
+        onClose={() => setUserMenuAnchor(null)}
+        anchorOrigin={{
+          vertical: 'bottom',
+          horizontal: 'right',
+        }}
+        transformOrigin={{
+          vertical: 'top',
+          horizontal: 'right',
+        }}
+      >
+        <MenuItem
+          component={Link}
+          to="/settings"
+          onClick={() => {
+            setUserMenuAnchor(null);
+            isMobile && setOpen(false);
+          }}
+        >
+          <SettingsIcon sx={{ mr: 1 }} fontSize="small" />
+          Settings
+        </MenuItem>
+        <MenuItem
+          component={Link}
+          to="/data-sharing"
+          onClick={() => {
+            setUserMenuAnchor(null);
+            isMobile && setOpen(false);
+          }}
+        >
+          <ShareIcon sx={{ mr: 1 }} fontSize="small" />
+          Data Sharing
+        </MenuItem>
+        <Divider />
+        <MenuItem
+          onClick={() => {
+            setUserMenuAnchor(null);
+            handleLogout();
+          }}
+        >
+          <LogoutIcon sx={{ mr: 1 }} fontSize="small" />
+          Logout
+        </MenuItem>
+      </Menu>
 
       <Divider />
 
@@ -181,6 +252,7 @@ const Sidebar = ({ open, setOpen }) => {
                 <ListItemButton
                   component={Link}
                   to={item.path}
+                  data-parent-id={item.id}
                   onClick={() => {
                     if (hasChildren) {
                       toggleExpanded(item.id);
@@ -221,7 +293,18 @@ const Sidebar = ({ open, setOpen }) => {
 
               {/* Child Items */}
               {hasChildren && (
-                <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+                <Collapse 
+                  in={isExpanded} 
+                  timeout="auto" 
+                  unmountOnExit
+                  onExiting={() => {
+                    // Move focus to parent before collapsing to prevent aria-hidden warnings
+                    const parentButton = document.querySelector(`[data-parent-id="${item.id}"]`);
+                    if (document.activeElement && parentButton) {
+                      parentButton.focus();
+                    }
+                  }}
+                >
                   <List component="div" disablePadding sx={{ pl: 2 }}>
                     {item.children.map((child) => {
                       const ChildIcon = child.icon;
@@ -280,6 +363,22 @@ const Sidebar = ({ open, setOpen }) => {
             <Button
               fullWidth
               variant="outlined"
+              color="primary"
+              size="small"
+              startIcon={<SettingsIcon />}
+              component={Link}
+              to="/settings"
+              onClick={() => {
+                closeAllExpanded();
+                isMobile && setOpen(false);
+              }}
+              sx={{ mb: 1 }}
+            >
+              {open ? 'Settings' : ''}
+            </Button>
+            <Button
+              fullWidth
+              variant="outlined"
               color="error"
               size="small"
               startIcon={<LogoutIcon />}
@@ -324,6 +423,8 @@ const Sidebar = ({ open, setOpen }) => {
         variant="temporary"
         open={open}
         onClose={() => setOpen(false)}
+        disableAutoFocus
+        disableEnforceFocus
         sx={{
           display: { xs: 'block', sm: 'none' },
           '& .MuiDrawer-paper': {

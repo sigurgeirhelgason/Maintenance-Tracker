@@ -17,7 +17,7 @@ const Login = () => {
   const navigate = useNavigate();
   const { login, error, loading: authLoading } = useAuth();
   const [formData, setFormData] = useState({
-    username: '',
+    email: '',
     password: '',
   });
   const [localError, setLocalError] = useState(null);
@@ -35,14 +35,14 @@ const Login = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (!formData.username || !formData.password) {
+    if (!formData.email || !formData.password) {
       setLocalError('Please fill in all fields');
       return;
     }
 
     try {
       setLoading(true);
-      await login(formData.username, formData.password);
+      await login(formData.email, formData.password);
       navigate('/');
     } catch (err) {
       setLocalError(error || 'Login failed');
@@ -80,10 +80,10 @@ const Login = () => {
             <form onSubmit={handleSubmit}>
               <TextField
                 fullWidth
-                label="Username"
-                name="username"
-                type="text"
-                value={formData.username}
+                label="Email"
+                name="email"
+                type="email"
+                value={formData.email}
                 onChange={handleChange}
                 margin="normal"
                 disabled={loading || authLoading}

@@ -21,21 +21,23 @@ import {
   Alert,
   IconButton,
 } from '@mui/material';
-import { Close as CloseIcon, Phone as PhoneIcon, Email as EmailIcon, LocationOn as LocationIcon, Star as StarIcon, StarBorder as StarBorderIcon, ArrowUpward as ArrowUpIcon, ArrowDownward as ArrowDownIcon } from '@mui/icons-material';
+import { Close as CloseIcon, Phone as PhoneIcon, Email as EmailIcon, LocationOn as LocationIcon, Star as StarIcon, StarBorder as StarBorderIcon, ArrowUpward as ArrowUpIcon, ArrowDownward as ArrowDownIcon, Download as DownloadIcon } from '@mui/icons-material';
 
-const VendorDetailModal = ({ open, vendor, onClose, onEdit, onToggleFavorite }) => {
+const VendorDetailModal = ({ open, vendor, onClose, onEdit, onToggleFavorite, onToggleSaved, isAdmin }) => {
   const [vendorTasks, setVendorTasks] = useState([]);
   const [tasksLoading, setTasksLoading] = useState(false);
   const [tasksError, setTasksError] = useState(null);
   const [isFavorite, setIsFavorite] = useState(vendor?.favorite || false);
+  const [isSaved, setIsSaved] = useState(vendor?.saved || false);
   const [sortBy, setSortBy] = useState('description');
   const [sortDirection, setSortDirection] = useState('asc');
 
   useEffect(() => {
     if (vendor) {
       setIsFavorite(vendor.favorite || false);
+      setIsSaved(vendor.saved || false);
     }
-  }, [vendor?.id, vendor?.favorite]);
+  }, [vendor?.id, vendor?.favorite, vendor?.saved]);
 
   useEffect(() => {
     if (open && vendor) {
@@ -141,9 +143,23 @@ const VendorDetailModal = ({ open, vendor, onClose, onEdit, onToggleFavorite }) 
               onToggleFavorite?.(vendor);
             }}
             sx={{ color: isFavorite ? '#ffc107' : 'inherit' }}
+            title="Add to favorites"
           >
             {isFavorite ? <StarIcon /> : <StarBorderIcon />}
           </IconButton>
+          {vendor?.is_global && (
+            <IconButton 
+              size="small" 
+              onClick={() => {
+                setIsSaved(!isSaved);
+                onToggleSaved?.(vendor);
+              }}
+              sx={{ color: isSaved ? '#2196f3' : 'inherit' }}
+              title={isSaved ? 'Remove from My Vendors' : 'Save to My Vendors'}
+            >
+              {isSaved ? <DownloadIcon /> : <DownloadIcon sx={{ opacity: 0.5 }} />}
+            </IconButton>
+          )}
           <IconButton size="small" onClick={onClose}>
             <CloseIcon />
           </IconButton>
@@ -209,22 +225,27 @@ const VendorDetailModal = ({ open, vendor, onClose, onEdit, onToggleFavorite }) 
                 <Typography variant="body2" sx={{ fontWeight: 500 }}>
                   {vendor.address}
                 </Typography>
+                {(vendor.postal_code || vendor.city) && (
+                  <Typography variant="body2" sx={{ fontWeight: 500, mt: 0.3 }}>
+                    {[vendor.postal_code, vendor.city].filter(Boolean).join(', ')}
+                  </Typography>
+                )}
               </Box>
             </Box>
           )}
 
-          {/* Task Types */}
-          {(vendor.task_type_details || (vendor.secondary_task_types_details && vendor.secondary_task_types_details.length > 0)) && (
+          {/* Specialities */}
+          {(vendor.speciality_details || (vendor.secondary_specialities_details && vendor.secondary_specialities_details.length > 0)) && (
             <Box sx={{ mb: 2 }}>
               <Typography variant="caption" sx={{ color: '#999', fontWeight: 500, display: 'block', mb: 0.7 }}>
-                TASK TYPES
+                SPECIALITIES
               </Typography>
               <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                {vendor.task_type_details && (
-                  <Chip label={vendor.task_type_details.name} size="small" color="primary" />
+                {vendor.speciality_details && (
+                  <Chip label={vendor.speciality_details.name} size="small" color="primary" />
                 )}
-                {vendor.secondary_task_types_details && vendor.secondary_task_types_details.map(type => (
-                  <Chip key={type.id} label={type.name} size="small" variant="outlined" />
+                {vendor.secondary_specialities_details && vendor.secondary_specialities_details.map(spec => (
+                  <Chip key={spec.id} label={spec.name} size="small" variant="outlined" />
                 ))}
               </Box>
             </Box>
@@ -346,9 +367,11 @@ const VendorDetailModal = ({ open, vendor, onClose, onEdit, onToggleFavorite }) 
       </DialogContent>
 
       <DialogActions sx={{ pt: 2, borderTop: '1px solid #e0e0e0' }}>
-        <Button onClick={() => { onClose(); onEdit?.(); }} variant="contained" color="primary">
-          Edit
-        </Button>
+        {(!vendor?.is_global || isAdmin) && (
+          <Button onClick={() => { onClose(); onEdit?.(); }} variant="contained" color="primary">
+            Edit
+          </Button>
+        )}
         <Button onClick={onClose}>
           Close
         </Button>

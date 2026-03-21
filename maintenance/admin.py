@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Property, Area, MaintenanceTask, TaskType, Vendor, Attachment
+from .models import Property, Area, MaintenanceTask, TaskType, Vendor, Attachment, DataShare
 
 @admin.register(Property)
 class PropertyAdmin(admin.ModelAdmin):
@@ -37,3 +37,10 @@ class AttachmentAdmin(admin.ModelAdmin):
     list_display = ('file', 'task', 'uploaded_at')
     search_fields = ('task__description',)
     list_filter = ('uploaded_at',)
+
+@admin.register(DataShare)
+class DataShareAdmin(admin.ModelAdmin):
+    list_display = ('owner', 'shared_with', 'created_at')
+    search_fields = ('owner__username', 'owner__email', 'shared_with__username', 'shared_with__email')
+    list_filter = ('created_at', 'updated_at')
+    readonly_fields = ('created_at', 'updated_at')
