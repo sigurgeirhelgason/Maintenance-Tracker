@@ -110,12 +110,10 @@ class PropertySerializer(serializers.ModelSerializer):
         read_only_fields = ['user', 'user_email', 'created_at', 'updated_at']
 
     def get_areas(self, obj):
-        areas = obj.areas.all()
-        return AreaSerializer(areas, many=True).data
+        return AreaSerializer(obj.areas.all(), many=True, context=self.context).data
 
     def get_tasks(self, obj):
-        tasks = obj.tasks.all()
-        return MaintenanceTaskSerializer(tasks, many=True).data
+        return MaintenanceTaskSerializer(obj.tasks.all(), many=True, context=self.context).data
 
 class AreaSerializer(serializers.ModelSerializer):
     class Meta:

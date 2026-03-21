@@ -112,6 +112,14 @@ class AreaViewSet(viewsets.ModelViewSet):
         shared_users = DataShare.objects.filter(shared_with=user).values_list('owner_id', flat=True)
         return Area.objects.filter(Q(property__user=user) | Q(property__user__in=shared_users))
     
+    def perform_create(self, serializer):
+        # Verify that the target property belongs to the current user or that the
+        # user has write access to it via a data share before creating an area.
+        property_obj = serializer.validated_data.get('property')
+        if property_obj.user != self.request.user and not can_write(self.request.user, property_obj.user, 'areas'):
+            raise PermissionDenied("You do not have permission to add areas to this property.")
+        serializer.save()
+
     def perform_update(self, serializer):
         # Check write permission for shared data
         obj = self.get_object()

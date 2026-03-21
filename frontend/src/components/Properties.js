@@ -35,6 +35,8 @@ const ROOM_TYPES = [
   'Office',
   'Laundry',
   'Dining room',
+  'Hallway',
+  'Other',
 ];
 
 const Properties = () => {
@@ -177,6 +179,8 @@ const Properties = () => {
       setFormData({
         name: '',
         address: '',
+        postal_code: '',
+        city: '',
         num_floors: 1,
         has_garden: false,
         image: null,
@@ -308,11 +312,10 @@ const Properties = () => {
       }
 
       // Remove old floors if decreased (but keep garden floor if it exists)
-      for (let i = newFloors + 1; i <= Object.keys(updatedFloors).length; i++) {
-        if (i !== 0) {  // Don't delete garden floor
-          delete updatedFloors[i];
-        }
-      }
+      Object.keys(updatedFloors).forEach(key => {
+        const k = parseInt(key);
+        if (k > newFloors && k !== 0) delete updatedFloors[k];
+      });
 
       setFormData(prev => ({
         ...prev,
