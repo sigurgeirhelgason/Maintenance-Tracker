@@ -169,7 +169,7 @@ function AppContent() {
           display: 'flex',
           flexDirection: 'column',
           width: '100%',
-          ml: { xs: 0, sm: sidebarOpen ? '80px' : '48px' },
+          ml: { xs: 0, sm: 0 },
           transition: 'margin 0.3s ease',
           overflowY: 'auto',
         }}

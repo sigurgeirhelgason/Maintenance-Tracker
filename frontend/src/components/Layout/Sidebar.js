@@ -55,12 +55,18 @@ const Sidebar = ({ open, setOpen }) => {
   const [expandedItems, setExpandedItems] = useState({});
   const [userMenuAnchor, setUserMenuAnchor] = useState(null);
 
-  // Auto-close mobile drawer only when transitioning from mobile to desktop
+  // Handle open state transitions between mobile and desktop
   useEffect(() => {
-    if (prevIsMobileRef.current === true && isMobile === false && open) {
-      setOpen(false);
+    if (prevIsMobileRef.current !== isMobile) {
+      if (!isMobile) {
+        // Going back to desktop - always restore full sidebar
+        setOpen(true);
+      } else {
+        // Going to mobile - close any open state so mobile starts closed
+        setOpen(false);
+      }
+      prevIsMobileRef.current = isMobile;
     }
-    prevIsMobileRef.current = isMobile;
   }, [isMobile]);
 
   const handleLogout = () => {
