@@ -64,27 +64,29 @@ const Reports = () => {
   const [areas, setAreas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState(0);
+
+  const reportTypeTabMap = {
+    'cost-analysis': 0,
+    'task-status': 1,
+    'vendor-performance': 2,
+    'maintenance-history': 3,
+    'monthly-costs': 4,
+    'area-maintenance': 5,
+    'schedule': 6,
+    'vat-refunds': 7,
+  };
+
+  const [activeTab, setActiveTab] = useState(() => reportTypeTabMap[reportType] ?? 0);
   const [yearFilter, setYearFilter] = useState('all');
   const [monthModalOpen, setMonthModalOpen] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(null);
   const [areaModalOpen, setAreaModalOpen] = useState(false);
   const [selectedArea, setSelectedArea] = useState(null);
 
-  // Map reportType to tab index
+  // Sync tab when reportType changes (e.g. browser back/forward)
   useEffect(() => {
     if (reportType) {
-      const tabMap = {
-        'cost-analysis': 0,
-        'task-status': 1,
-        'vendor-performance': 2,
-        'maintenance-history': 3,
-        'monthly-costs': 4,
-        'area-maintenance': 5,
-        'schedule': 6,
-        'vat-refunds': 7,
-      };
-      setActiveTab(tabMap[reportType] ?? 0);
+      setActiveTab(reportTypeTabMap[reportType] ?? 0);
     }
   }, [reportType]);
 
@@ -663,8 +665,8 @@ const Reports = () => {
               <Grid item xs={12} md={6}>
                 <Card>
                   <CardHeader title="Cost Distribution by Property" />
-                  <CardContent sx={{ height: 300, minHeight: 300 }}>
-                    <ResponsiveContainer width="100%" height="100%">
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={300} minWidth={0}>
                       <PieChart>
                         <Pie
                           data={costByProperty}
@@ -689,8 +691,8 @@ const Reports = () => {
               <Grid item xs={12} md={6}>
                 <Card>
                   <CardHeader title="Cost by Task Type" />
-                  <CardContent sx={{ height: 300, minHeight: 300 }}>
-                    <ResponsiveContainer width="100%" height="100%">
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={300} minWidth={0}>
                       <BarChart data={costByTaskType}>
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="type" angle={-45} textAnchor="end" height={80} />
@@ -867,8 +869,8 @@ const Reports = () => {
               <Grid item xs={12} md={6}>
                 <Card>
                   <CardHeader title="Task Status Distribution" />
-                  <CardContent sx={{ height: 300, minHeight: 300 }}>
-                    <ResponsiveContainer width="100%" height="100%">
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={300} minWidth={0}>
                       <PieChart>
                         <Pie
                           data={[
@@ -1052,9 +1054,9 @@ const Reports = () => {
               <Grid item xs={12} md={8}>
                 <Card>
                   <CardHeader title="Vendor Performance Overview" />
-                  <CardContent sx={{ height: 400, minHeight: 400 }}>
+                  <CardContent>
                     {vendorPerformance.length > 0 ? (
-                      <ResponsiveContainer width="100%" height="100%">
+                      <ResponsiveContainer width="100%" height={400} minWidth={0}>
                         <BarChart data={vendorPerformance.slice(0, 10)}>
                           <CartesianGrid strokeDasharray="3 3" />
                           <XAxis 
@@ -1290,9 +1292,9 @@ const Reports = () => {
                   </Box>
                 }
               />
-              <CardContent sx={{ height: 400, minHeight: 400 }}>
+              <CardContent>
                 {monthlyCosts.some(m => m.cost > 0) ? (
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer width="100%" height={400} minWidth={0}>
                     <LineChart data={monthlyCosts}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="month" />
@@ -1500,7 +1502,7 @@ const Reports = () => {
               <CardHeader title="Maintenance by Area" />
               <CardContent sx={{ minHeight: 350 }}>
                 {areaMaintenanceData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={300}>
+                  <ResponsiveContainer width="100%" height={300} minWidth={0}>
                     <BarChart data={areaMaintenanceData} margin={{ top: 20, right: 30, left: 0, bottom: 60 }}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis 
@@ -1850,7 +1852,7 @@ const Reports = () => {
               <CardHeader title="Refund Status Distribution" />
               <CardContent sx={{ minHeight: 350 }}>
                 {refundStatusData.notClaimed + refundStatusData.claimed > 0 ? (
-                  <ResponsiveContainer width="100%" height={300}>
+                  <ResponsiveContainer width="100%" height={300} minWidth={0}>
                     <PieChart>
                       <Pie
                         data={[
@@ -1944,10 +1946,10 @@ const Reports = () => {
         )}
 
         {/* Month Tasks Modal */}
-        <Dialog 
-          open={monthModalOpen} 
-          onClose={() => setMonthModalOpen(false)} 
-          maxWidth="md" 
+        <Dialog
+          open={monthModalOpen}
+          onClose={() => setMonthModalOpen(false)}
+          maxWidth="md"
           fullWidth
         >
           <DialogTitle>
@@ -2024,10 +2026,10 @@ const Reports = () => {
         </Dialog>
 
         {/* Area Tasks Modal */}
-        <Dialog 
-          open={areaModalOpen} 
-          onClose={() => setAreaModalOpen(false)} 
-          maxWidth="md" 
+        <Dialog
+          open={areaModalOpen}
+          onClose={() => setAreaModalOpen(false)}
+          maxWidth="md"
           fullWidth
         >
           <DialogTitle>

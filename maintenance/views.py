@@ -289,6 +289,23 @@ class VendorViewSet(viewsets.ModelViewSet):
             status=status.HTTP_200_OK,
         )
 
+    @action(detail=True, methods=['post'], url_path='send-email')
+    def send_email(self, request, pk=None):
+        vendor = self.get_object()
+        if not vendor.email:
+            return Response({'error': 'Vendor has no email address.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        subject = request.data.get('subject', '').strip()
+        message = request.data.get('message', '').strip()
+        if not subject or not message:
+            return Response({'error': 'Subject and message are required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        from django.core.mail import send_mail
+        from django.conf import settings as django_settings
+        recipient = django_settings.DEBUG_EMAIL_RECIPIENT or vendor.email
+        send_mail(subject, message, django_settings.DEFAULT_FROM_EMAIL, [recipient], fail_silently=False)
+        return Response({'status': 'Email sent.'})
+
 class MaintenanceTaskViewSet(OwnerPermissionMixin, viewsets.ModelViewSet):
     serializer_class = MaintenanceTaskSerializer
     filter_backends = [DjangoFilterBackend, OrderingFilter]
@@ -472,8 +489,11 @@ def import_datapack(request):
 def get_user_settings(request):
     """Get user settings and profile information"""
     try:
+        from django.conf import settings as django_settings
         serializer = UserDetailSerializer(request.user)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        data = serializer.data
+        data['debug_email_recipient'] = getattr(django_settings, 'DEBUG_EMAIL_RECIPIENT', '') or ''
+        return Response(data, status=status.HTTP_200_OK)
     except Exception as e:
         return Response(
             {'error': f'Failed to get user settings: {str(e)}'},

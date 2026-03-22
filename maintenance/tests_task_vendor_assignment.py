@@ -239,18 +239,13 @@ class TaskVendorCrossUserTests(TestCase):
 
     def test_assign_other_users_personal_vendor_to_task(self):
         """
-        Assigning another user's personal vendor to a task.
+        Assigning another user's personal vendor to a task must be rejected.
 
-        The backend currently does NOT restrict which vendor ID can be placed
-        on a task — it only validates that the vendor ID exists in the DB.
         Bob's vendor is not in Alice's accessible vendor queryset
-        (VendorViewSet.get_queryset), but MaintenanceTaskSerializer performs a
-        plain FK lookup against all Vendor rows, so it will accept the ID.
-
-        This test documents the current behaviour.  If the design decision is
-        that this SHOULD be blocked (vendor must belong to the task owner or be
-        global), this test should be updated to assert HTTP_400_BAD_REQUEST and
-        the serializer must add a validate_vendor() method.
+        (VendorViewSet.get_queryset).  The backend now validates that the vendor
+        assigned to a task is accessible to the requesting user — i.e. it must
+        be the user's own personal vendor, a global vendor, or a vendor shared
+        with the user.  Assigning an out-of-scope vendor returns 400.
         """
         self.client.force_authenticate(user=self.user_alice)
         response = self.client.patch(
@@ -258,17 +253,7 @@ class TaskVendorCrossUserTests(TestCase):
             {"vendor": self.bob_vendor.id},
             format="json",
         )
-        # Document current (permissive) behaviour: assignment succeeds
-        # because there is no cross-ownership vendor validation on the task.
-        self.assertEqual(
-            response.status_code,
-            status.HTTP_200_OK,
-            msg=(
-                "DESIGN NOTE: The backend does not currently prevent assigning "
-                "another user's personal vendor to a task. "
-                "See tests_task_vendor_assignment.py for details."
-            ),
-        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
 
 class TaskVendorAuthTests(TestCase):

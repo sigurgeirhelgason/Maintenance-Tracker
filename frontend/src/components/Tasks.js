@@ -33,8 +33,13 @@ import {
   TableRow,
   InputAdornment,
   IconButton,
+  Divider,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemButton,
 } from '@mui/material';
-import { Add as AddIcon, Download as DownloadIcon, Search as SearchIcon, ArrowUpward as ArrowUpIcon, ArrowDownward as ArrowDownIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import { Add as AddIcon, Download as DownloadIcon, Search as SearchIcon, ArrowUpward as ArrowUpIcon, ArrowDownward as ArrowDownIcon, Delete as DeleteIcon, Email as EmailIcon } from '@mui/icons-material';
 import PageHeader from './Layout/PageHeader';
 import DetailPanel from './shared/DetailPanel';
 import DetailField from './shared/DetailField';
@@ -68,6 +73,17 @@ const Tasks = () => {
   });
   const { notification, showNotification, handleCloseNotification } = useNotification();
   const { confirmDialog, openConfirmDialog, handleConfirmDialogClose, handleConfirmDialogConfirm } = useConfirmDialog();
+
+  const [globalVendorSearchOpen, setGlobalVendorSearchOpen] = useState(false);
+  const [globalVendors, setGlobalVendors] = useState([]);
+  const [globalVendorSearch, setGlobalVendorSearch] = useState('');
+  const [globalVendorLoading, setGlobalVendorLoading] = useState(false);
+  const [selectedGlobalVendor, setSelectedGlobalVendor] = useState(null);
+
+  const [vendorEmailOpen, setVendorEmailOpen] = useState(false);
+  const [vendorEmailTarget, setVendorEmailTarget] = useState(null);
+  const [vendorEmailMessage, setVendorEmailMessage] = useState('');
+  const [debugEmailRecipient, setDebugEmailRecipient] = useState('');
   
   const [formData, setFormData] = useState({
     description: '',
@@ -203,18 +219,112 @@ const Tasks = () => {
   // dropdown doesn't show a blank selected value.
   const selectableVendors = useMemo(() => {
     const filtered = vendors.filter(v => v.favorite || (user && v.user === user.id));
+    const extras = [];
+
+    // When editing, always include the currently assigned vendor even if not in user's list
     if (editing?.vendor) {
       const currentVendorId = editing.vendor?.id ?? editing.vendor;
-      const alreadyIncluded = filtered.some(v => v.id === currentVendorId);
-      if (!alreadyIncluded) {
-        const currentVendor = vendors.find(v => v.id === currentVendorId);
-        if (currentVendor) return [...filtered, currentVendor];
+      if (!filtered.some(v => v.id === currentVendorId)) {
+        const currentVendor = vendors.find(v => v.id === currentVendorId) || editing.vendor_details;
+        if (currentVendor) extras.push(currentVendor);
       }
     }
-    return filtered;
-  }, [vendors, user, editing]);
 
+    // Include a vendor chosen from the global search dialog
+    if (selectedGlobalVendor && !filtered.some(v => v.id === selectedGlobalVendor.id) && !extras.some(v => v.id === selectedGlobalVendor.id)) {
+      extras.push(selectedGlobalVendor);
+    }
 
+    return extras.length ? [...filtered, ...extras] : filtered;
+  }, [vendors, user, editing, selectedGlobalVendor]);
+
+  const openGlobalVendorSearch = async () => {
+    setGlobalVendorSearchOpen(true);
+    setGlobalVendorSearch('');
+    setGlobalVendorLoading(true);
+    try {
+      const params = {};
+      if (formData.task_type) params.speciality = formData.task_type;
+      const res = await axios.get('/api/vendors/', { params });
+      const taskTypeId = formData.task_type ? Number(formData.task_type) : null;
+      const seen = new Set();
+      const globals = res.data.filter(v => {
+        if (!v.is_global || seen.has(v.id)) return false;
+        seen.add(v.id);
+        return true;
+      });
+      // 4-tier sort:
+      // 1. premium + main speciality matches task type
+      // 2. premium + secondary speciality matches task type
+      // 3. not premium + main speciality matches task type
+      // 4. not premium + secondary speciality matches task type
+      const tier = (v) => {
+        const mainMatch = taskTypeId && v.speciality === taskTypeId;
+        const secMatch = taskTypeId && Array.isArray(v.secondary_specialities) && v.secondary_specialities.includes(taskTypeId);
+        if (v.is_premium && mainMatch) return 1;
+        if (v.is_premium && secMatch) return 2;
+        if (!v.is_premium && mainMatch) return 3;
+        if (!v.is_premium && secMatch) return 4;
+        return 5;
+      };
+      globals.sort((a, b) => tier(a) - tier(b) || a.name.localeCompare(b.name));
+      setGlobalVendors(globals);
+    } catch {
+      setGlobalVendors([]);
+    } finally {
+      setGlobalVendorLoading(false);
+    }
+  };
+
+  const handleSelectGlobalVendor = (vendor) => {
+    setSelectedGlobalVendor(vendor);
+    setFormData(prev => ({ ...prev, vendor: vendor.id }));
+    setGlobalVendorSearchOpen(false);
+  };
+
+  const handleSendVendorEmail = () => {
+    if (!vendorEmailTarget) return;
+    const propertyName = properties.find(p => p.id === (selectedProperty?.id ?? selectedProperty))?.name || '';
+    const taskTypeName = taskTypes.find(t => t.id === Number(formData.task_type))?.name || '';
+    const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : '-';
+    const subject = `Maintenance Request: ${formData.description || '(no description)'}${propertyName ? ' \u2013 ' + propertyName : ''}`;
+
+    const divider  = '='.repeat(52);
+    const line     = '-'.repeat(52);
+    const pad = (label, value) => `  ${(label + ':').padEnd(16)}${value}`;
+
+    const fields = [
+      pad('Task', formData.description || '-'),
+      pad('Type', taskTypeName || '-'),
+      pad('Property', propertyName || '-'),
+      pad('Priority', capitalize(formData.priority)),
+      pad('Due Date', formData.due_date || '-'),
+      formData.estimated_price ? pad('Est. Price', formData.estimated_price) : null,
+    ].filter(Boolean).join('\n');
+
+    const notesPart = formData.notes
+      ? `\n${line}\n  NOTES\n${line}\n  ${formData.notes}\n`
+      : '';
+
+    const messagePart = vendorEmailMessage
+      ? `\n${divider}\n\n${vendorEmailMessage}\n`
+      : '';
+
+    const fullMessage =
+      `${divider}\n` +
+      `  MAINTENANCE REQUEST\n` +
+      `${divider}\n\n` +
+      `${fields}\n` +
+      `${notesPart}` +
+      `${messagePart}` +
+      `\n${divider}`;
+
+    const to = debugEmailRecipient || vendorEmailTarget.email;
+    const mailto = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(fullMessage)}`;
+    window.open(mailto, '_blank');
+    setVendorEmailOpen(false);
+    setVendorEmailMessage('');
+  };
 
   const handleSortClick = (newSort) => {
     if (sortBy === newSort) {
@@ -230,14 +340,16 @@ const Tasks = () => {
   const fetchInitialData = async () => {
     try {
       setLoading(true);
-      const [propsRes, typesRes, vendorsRes] = await Promise.all([
+      const [propsRes, typesRes, vendorsRes, settingsRes] = await Promise.all([
         axios.get('/api/properties/'),
         axios.get('/api/tasktypes/'),
         axios.get('/api/vendors/'),
+        axios.get('/api/user/settings/'),
       ]);
       setProperties(propsRes.data);
       setTaskTypes(typesRes.data);
       setVendors(vendorsRes.data);
+      setDebugEmailRecipient(settingsRes.data.debug_email_recipient || '');
       if (propsRes.data.length > 0 && !selectedProperty) {
         setSelectedProperty(propsRes.data[0].id);
       }
@@ -276,6 +388,7 @@ const Tasks = () => {
   };
 
   const handleOpen = (task = null) => {
+    setSelectedGlobalVendor(null);
     if (task) {
       setEditing(task);
       setFormData({
@@ -1239,10 +1352,11 @@ const Tasks = () => {
               name="vendor"
               value={formData.vendor?.id || formData.vendor || ''}
               onChange={(e) => {
-                setFormData(prev => ({
-                  ...prev,
-                  vendor: e.target.value
-                }));
+                if (e.target.value === '__find_global__') {
+                  openGlobalVendorSearch();
+                } else {
+                  setFormData(prev => ({ ...prev, vendor: e.target.value }));
+                }
               }}
               label="Vendor"
             >
@@ -1252,6 +1366,10 @@ const Tasks = () => {
                   {vendor.name}
                 </MenuItem>
               ))}
+              <Divider />
+              <MenuItem value="__find_global__" sx={{ color: 'primary.main', fontStyle: 'italic' }}>
+                Find vendor from global vendors...
+              </MenuItem>
             </Select>
           </FormControl>
 
@@ -1443,6 +1561,188 @@ const Tasks = () => {
         onClose={handleConfirmDialogClose}
         onConfirm={handleConfirmDialogConfirm}
       />
+
+      {/* Global Vendor Search Dialog */}
+      <Dialog
+        open={globalVendorSearchOpen}
+        onClose={() => setGlobalVendorSearchOpen(false)}
+        fullWidth
+        maxWidth="sm"
+        disableRestoreFocus
+      >
+        <DialogTitle>Find Vendor from Global Vendors</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            fullWidth
+            placeholder="Search by name..."
+            value={globalVendorSearch}
+            onChange={(e) => setGlobalVendorSearch(e.target.value)}
+            size="small"
+            sx={{ mt: 1, mb: 2 }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" />
+                </InputAdornment>
+              ),
+            }}
+          />
+          {globalVendorLoading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+              <CircularProgress size={32} />
+            </Box>
+          ) : globalVendors.length === 0 ? (
+            <Typography color="text.secondary" sx={{ textAlign: 'center', py: 3 }}>
+              No global vendors found{formData.task_type ? ' for this task type' : ''}.
+            </Typography>
+          ) : (
+            <List disablePadding>
+              {globalVendors
+                .filter(v =>
+                  !globalVendorSearch ||
+                  v.name.toLowerCase().includes(globalVendorSearch.toLowerCase())
+                )
+                .map((vendor, idx, arr) => {
+                  const taskTypeId = formData.task_type ? Number(formData.task_type) : null;
+                  const mainMatch = taskTypeId && vendor.speciality === taskTypeId;
+                  const secMatch = taskTypeId && Array.isArray(vendor.secondary_specialities) && vendor.secondary_specialities.includes(taskTypeId);
+                  const specialityLabel = mainMatch
+                    ? taskTypes.find(t => t.id === taskTypeId)?.name
+                    : secMatch
+                    ? taskTypes.find(t => t.id === taskTypeId)?.name + ' (secondary)'
+                    : null;
+                  // Add divider between tiers
+                  const tier = (v) => {
+                    const m = taskTypeId && v.speciality === taskTypeId;
+                    const s = taskTypeId && Array.isArray(v.secondary_specialities) && v.secondary_specialities.includes(taskTypeId);
+                    if (v.is_premium && m) return 1;
+                    if (v.is_premium && s) return 2;
+                    if (!v.is_premium && m) return 3;
+                    if (!v.is_premium && s) return 4;
+                    return 5;
+                  };
+                  const showDivider = idx > 0 && tier(vendor) !== tier(arr[idx - 1]);
+                  return (
+                    <React.Fragment key={vendor.id}>
+                      {showDivider && <Divider />}
+                      <ListItem
+                        disablePadding
+                        secondaryAction={
+                          vendor.email ? (
+                            <IconButton
+                              size="small"
+                              title="Email this vendor"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setVendorEmailTarget(vendor);
+                                setVendorEmailMessage('');
+                                setVendorEmailOpen(true);
+                              }}
+                            >
+                              <EmailIcon fontSize="small" />
+                            </IconButton>
+                          ) : null
+                        }
+                      >
+                        <ListItemButton onClick={() => handleSelectGlobalVendor(vendor)} sx={{ pr: vendor.email ? 6 : 2 }}>
+                          <ListItemText
+                            primary={
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Typography variant="body1" fontWeight={vendor.is_premium ? 700 : 400}>
+                                  {vendor.name}
+                                </Typography>
+                                {vendor.is_premium && (
+                                  <Chip label="Premium" size="small" color="primary" />
+                                )}
+                              </Box>
+                            }
+                            secondary={
+                              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 0.5 }}>
+                                {specialityLabel && (
+                                  <Chip label={specialityLabel} size="small" variant="outlined" />
+                                )}
+                                {vendor.contact_person && (
+                                  <Typography variant="caption" color="text.secondary">
+                                    {vendor.contact_person}
+                                  </Typography>
+                                )}
+                                {vendor.phone && (
+                                  <Typography variant="caption" color="text.secondary">
+                                    {vendor.phone}
+                                  </Typography>
+                                )}
+                              </Box>
+                            }
+                            secondaryTypographyProps={{ component: 'div' }}
+                          />
+                        </ListItemButton>
+                      </ListItem>
+                    </React.Fragment>
+                  );
+                })}
+            </List>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setGlobalVendorSearchOpen(false)}>Cancel</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Vendor Email Compose Dialog */}
+      <Dialog
+        open={vendorEmailOpen}
+        onClose={() => setVendorEmailOpen(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Email {vendorEmailTarget?.name}</DialogTitle>
+        <DialogContent>
+          <TextField
+            label="To"
+            value={debugEmailRecipient || vendorEmailTarget?.email || ''}
+            fullWidth
+            disabled
+            size="small"
+            sx={{ mt: 1, mb: debugEmailRecipient ? 1 : 2 }}
+          />
+          {debugEmailRecipient && (
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              Debug mode: email will be sent to <strong>{debugEmailRecipient}</strong> instead of the vendor.
+            </Alert>
+          )}
+          <Paper variant="outlined" sx={{ p: 1.5, mb: 2 }}>
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+              Task Details (included in email)
+            </Typography>
+            <Typography variant="body2">{formData.description || '—'}</Typography>
+            <Typography variant="caption" color="text.secondary">
+              {taskTypes.find(t => t.id === Number(formData.task_type))?.name}
+              {formData.priority ? ` · ${formData.priority} priority` : ''}
+              {formData.due_date ? ` · Due ${formData.due_date}` : ''}
+            </Typography>
+          </Paper>
+          <TextField
+            label="Custom Message"
+            multiline
+            rows={4}
+            fullWidth
+            value={vendorEmailMessage}
+            onChange={(e) => setVendorEmailMessage(e.target.value)}
+            placeholder="Add a personal message to the vendor..."
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setVendorEmailOpen(false)}>Cancel</Button>
+          <Button
+            onClick={handleSendVendorEmail}
+            variant="contained"
+            startIcon={<EmailIcon />}
+          >
+            Open in Email Client
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

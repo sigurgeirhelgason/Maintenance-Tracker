@@ -421,7 +421,7 @@ const Sidebar = ({ open, setOpen }) => {
       {/* Mobile Drawer */}
       <Drawer
         variant="temporary"
-        open={open}
+        open={isMobile && open}
         onClose={() => setOpen(false)}
         disableAutoFocus
         disableEnforceFocus
