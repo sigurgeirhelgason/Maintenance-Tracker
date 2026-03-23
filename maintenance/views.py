@@ -9,14 +9,17 @@ from rest_framework.filters import OrderingFilter, SearchFilter
 from django.http import FileResponse
 from django.contrib.auth.models import User
 from django.db.models import Q, Case, When, Value, IntegerField, F, Prefetch
+from django.db import transaction
+from django.utils import timezone
 from datetime import datetime
-from .models import Property, Area, MaintenanceTask, Vendor, Attachment, TaskType, DataShare, UserVendorPreference
+from .models import Property, Area, MaintenanceTask, Vendor, Attachment, TaskType, DataShare, UserVendorPreference, OwnershipTransfer
 from .serializers import (
     PropertySerializer, AreaSerializer, MaintenanceTaskSerializer,
     VendorSerializer, AttachmentSerializer, TaskTypeSerializer,
     UserRegistrationSerializer, UserSerializer, ExportSerializer, ImportSerializer,
     UserDetailSerializer, UserUpdateSerializer, PasswordChangeSerializer,
-    EmailTokenObtainPairSerializer, DataShareSerializer, CreateDataShareSerializer
+    EmailTokenObtainPairSerializer, DataShareSerializer, CreateDataShareSerializer,
+    OwnershipTransferSerializer, CreateOwnershipTransferSerializer,
 )
 from .services.export_service import DatapackExporter
 from .services.import_service import DatapackImporter
@@ -390,10 +393,216 @@ class DataShareViewSet(viewsets.ModelViewSet):
         serializer.save()
     
     def perform_destroy(self, instance):
-        """Allow only the owner to delete a share"""
-        if instance.owner != self.request.user:
-            raise PermissionDenied("You can only delete shares you created.")
+        """Allow the owner or the shared_with user to delete a share"""
+        if instance.owner != self.request.user and instance.shared_with != self.request.user:
+            raise PermissionDenied("You can only delete shares you are part of.")
         instance.delete()
+
+class OwnershipTransferViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for the Give Ownership feature.
+
+    list     — authenticated user sees transfers where they are from_user or to_user
+    create   — authenticated owner initiates a transfer (POST /ownership-transfer/)
+    retrieve — authenticated user retrieves a single transfer they are part of
+    destroy  — only from_user can delete (cancel) a pending transfer
+    confirm  — token-based confirmation, no auth required (GET /ownership-transfer/confirm/<token>/)
+    cancel   — owner cancels a pending transfer (POST /ownership-transfer/<pk>/cancel/)
+    """
+    permission_classes = [IsAuthenticated]
+    http_method_names = ['get', 'post', 'delete', 'head', 'options']
+
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return CreateOwnershipTransferSerializer
+        return OwnershipTransferSerializer
+
+    def get_queryset(self):
+        user = self.request.user
+        return OwnershipTransfer.objects.filter(
+            Q(from_user=user) | Q(to_user=user)
+        ).filter(deleted_at__isnull=True).select_related('property', 'from_user', 'to_user')
+
+    # ------------------------------------------------------------------
+    # POST /ownership-transfer/
+    # ------------------------------------------------------------------
+    def create(self, request, *args, **kwargs):
+        serializer = CreateOwnershipTransferSerializer(
+            data=request.data, context={'request': request}
+        )
+        serializer.is_valid(raise_exception=True)
+
+        property_obj = serializer.validated_data['property']
+        to_email = serializer.validated_data['to_user_email']
+        to_user = User.objects.get(email=to_email)
+
+        transfer = OwnershipTransfer.create_transfer(
+            property=property_obj,
+            from_user=request.user,
+            to_user=to_user,
+        )
+
+        # Send confirmation email — non-fatal if it fails
+        try:
+            from .services.email_service import send_ownership_transfer_email
+            send_ownership_transfer_email(transfer)
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning(
+                "Failed to send ownership transfer email for transfer %s: %s",
+                transfer.pk, exc,
+            )
+
+        output = OwnershipTransferSerializer(transfer)
+        return Response(output.data, status=status.HTTP_201_CREATED)
+
+    # ------------------------------------------------------------------
+    # GET /ownership-transfer/
+    # ------------------------------------------------------------------
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        serializer = OwnershipTransferSerializer(queryset, many=True)
+        return Response(serializer.data)
+
+    # ------------------------------------------------------------------
+    # GET /ownership-transfer/<pk>/
+    # ------------------------------------------------------------------
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = OwnershipTransferSerializer(instance)
+        return Response(serializer.data)
+
+    # ------------------------------------------------------------------
+    # DELETE /ownership-transfer/<pk>/
+    # ------------------------------------------------------------------
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        is_from_user = instance.from_user == request.user
+        is_to_user = instance.to_user == request.user
+
+        if instance.status == OwnershipTransfer.STATUS_PENDING:
+            if not is_from_user:
+                return Response(
+                    {'error': 'Only the initiating user can cancel a pending transfer.'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            instance.status = OwnershipTransfer.STATUS_CANCELLED
+            instance.deleted_at = timezone.now()
+            instance.save(update_fields=['status', 'deleted_at'])
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+        if instance.status in (
+            OwnershipTransfer.STATUS_CONFIRMED,
+            OwnershipTransfer.STATUS_CANCELLED,
+            OwnershipTransfer.STATUS_EXPIRED,
+        ):
+            if not (is_from_user or is_to_user):
+                return Response(
+                    {'error': 'You do not have permission to delete this transfer.'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            instance.deleted_at = timezone.now()
+            instance.save(update_fields=['deleted_at'])
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+        return Response(
+            {'error': 'You do not have permission to delete this transfer.'},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    # ------------------------------------------------------------------
+    # GET /ownership-transfer/confirm/<token>/
+    # ------------------------------------------------------------------
+    @action(
+        detail=False,
+        methods=['get'],
+        url_path=r'confirm/(?P<token>[^/.]+)',
+        permission_classes=[AllowAny],
+    )
+    def confirm(self, request, token=None, *args, **kwargs):
+        from django.utils import timezone as tz
+
+        try:
+            transfer = OwnershipTransfer.objects.select_related(
+                'property', 'from_user', 'to_user'
+            ).get(token=token)
+        except OwnershipTransfer.DoesNotExist:
+            return Response(
+                {'error': 'Invalid or unknown transfer token.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if transfer.is_expired or transfer.status != OwnershipTransfer.STATUS_PENDING:
+            return Response(
+                {'error': 'This transfer link has expired or already been used.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        property_obj = transfer.property
+        from_user = transfer.from_user
+        to_user = transfer.to_user
+
+        with transaction.atomic():
+            # 1. Re-assign property ownership
+            property_obj.user = to_user
+            property_obj.save(update_fields=['user'])
+
+            # 2. Re-assign tasks
+            MaintenanceTask.objects.filter(property=property_obj).update(user=to_user)
+
+            # 3. Re-assign attachments for those tasks
+            task_ids = list(
+                MaintenanceTask.objects.filter(property=property_obj).values_list('id', flat=True)
+            )
+            Attachment.objects.filter(task_id__in=task_ids).update(user=to_user)
+
+            # 4. Re-assign areas — Area has no user field in the current schema;
+            #    areas stay linked to the property which is now owned by to_user.
+
+            # 5. Remove any DataShare between from_user and to_user in either
+            #    direction so the old owner has no residual access.
+            DataShare.objects.filter(
+                Q(owner=from_user, shared_with=to_user) |
+                Q(owner=to_user, shared_with=from_user)
+            ).delete()
+
+            # 6. Mark transfer confirmed
+            transfer.status = OwnershipTransfer.STATUS_CONFIRMED
+            transfer.save(update_fields=['status'])
+
+        return Response(
+            {'message': 'Ownership transferred successfully.', 'property_name': property_obj.name},
+            status=status.HTTP_200_OK,
+        )
+
+    # ------------------------------------------------------------------
+    # POST /ownership-transfer/<pk>/cancel/
+    # ------------------------------------------------------------------
+    @action(detail=True, methods=['post'])
+    def cancel(self, request, pk=None, *args, **kwargs):
+        try:
+            transfer = OwnershipTransfer.objects.get(pk=pk)
+        except OwnershipTransfer.DoesNotExist:
+            return Response(
+                {'error': 'Transfer not found.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if transfer.from_user != request.user:
+            raise PermissionDenied("You can only cancel transfers that you initiated.")
+
+        if transfer.status != OwnershipTransfer.STATUS_PENDING:
+            return Response(
+                {'error': f"Cannot cancel a transfer with status '{transfer.status}'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        transfer.status = OwnershipTransfer.STATUS_CANCELLED
+        transfer.save(update_fields=['status'])
+
+        output = OwnershipTransferSerializer(transfer)
+        return Response(output.data, status=status.HTTP_200_OK)
+
 
 # Authentication Views
 @api_view(['POST'])

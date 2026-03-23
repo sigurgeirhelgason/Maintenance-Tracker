@@ -3,8 +3,12 @@ from django.core.validators import MinValueValidator
 from django.contrib.auth.models import User
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+from django.utils import timezone
+from functools import cached_property
+import datetime
 import logging
 import os
+import uuid
 
 logger = logging.getLogger(__name__)
 
@@ -299,3 +303,102 @@ class DataShare(models.Model):
     def get_permission(self, resource_type):
         """Get permission level for a specific resource type. Returns 'rw', 'ro', or None."""
         return self.permissions.get(resource_type)
+
+
+class OwnershipTransfer(models.Model):
+    """
+    Represents a request to transfer ownership of a Property from one user to another.
+    A token-based confirmation flow is used: the receiving user confirms via a unique URL
+    containing the token. Transfers expire after 48 hours if not confirmed.
+    """
+
+    STATUS_PENDING = 'pending'
+    STATUS_CONFIRMED = 'confirmed'
+    STATUS_EXPIRED = 'expired'
+    STATUS_CANCELLED = 'cancelled'
+
+    STATUS_CHOICES = [
+        (STATUS_PENDING, 'Pending'),
+        (STATUS_CONFIRMED, 'Confirmed'),
+        (STATUS_EXPIRED, 'Expired'),
+        (STATUS_CANCELLED, 'Cancelled'),
+    ]
+
+    property = models.ForeignKey(
+        Property,
+        on_delete=models.CASCADE,
+        related_name='ownership_transfers',
+    )
+    from_user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='transfers_initiated',
+    )
+    to_user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='transfers_received',
+    )
+    token = models.UUIDField(
+        default=uuid.uuid4,
+        unique=True,
+        editable=False,
+        db_index=True,
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_PENDING,
+        db_index=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    deleted_at = models.DateTimeField(null=True, blank=True, default=None)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['property', 'status']),
+        ]
+
+    def __str__(self):
+        return (
+            f"Transfer of {self.property.name} from {self.from_user} "
+            f"to {self.to_user} [{self.status}]"
+        )
+
+    def save(self, *args, **kwargs):
+        """Set expires_at to 48 hours from now when first created."""
+        if not self.pk and not self.expires_at:
+            self.expires_at = timezone.now() + datetime.timedelta(hours=48)
+        super().save(*args, **kwargs)
+
+    @cached_property
+    def is_expired(self):
+        """Return True if the transfer window has passed and status is still pending."""
+        return self.status == self.STATUS_PENDING and self.expires_at < timezone.now()
+
+    @cached_property
+    def is_deleted(self):
+        return self.deleted_at is not None
+
+    @classmethod
+    def create_transfer(cls, property, from_user, to_user):
+        """
+        Create a new pending transfer for the given property.
+
+        Any existing pending transfers for this property are cancelled first so
+        there is never more than one active transfer at a time.
+        """
+        # Cancel any open transfers for this property
+        cls.objects.filter(
+            property=property,
+            status=cls.STATUS_PENDING,
+        ).update(status=cls.STATUS_CANCELLED)
+
+        return cls.objects.create(
+            property=property,
+            from_user=from_user,
+            to_user=to_user,
+            expires_at=timezone.now() + datetime.timedelta(hours=48),
+        )

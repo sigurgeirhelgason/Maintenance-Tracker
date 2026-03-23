@@ -171,3 +171,5 @@ EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
 DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@maintenancetracker.com')
 # When set, all vendor emails are redirected here instead of the real vendor address (useful for testing)
 DEBUG_EMAIL_RECIPIENT = config('DEBUG_EMAIL_RECIPIENT', default='')
+# Frontend base URL — used to build confirmation links in outgoing emails
+FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:5173')

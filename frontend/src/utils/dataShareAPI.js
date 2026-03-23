@@ -18,7 +18,7 @@ export const createDataShare = async (email, permissions = null) => {
         attachments: 'rw',
       },
     };
-    
+
     const response = await axios.post('/api/datashare/', data);
     return response.data;
   } catch (error) {
@@ -63,6 +63,78 @@ export const updateDataSharePermissions = async (shareId, permissions) => {
     const response = await axios.patch(`/api/datashare/${shareId}/`, {
       permissions,
     });
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * Initiate an ownership transfer for a property
+ * @param {number} propertyId - ID of the property to transfer
+ * @param {string} toUserEmail - Email of the user to transfer ownership to
+ * @returns {Promise} Response from the API
+ */
+export const initiateOwnershipTransfer = async (propertyId, toUserEmail) => {
+  try {
+    const response = await axios.post('/api/ownership-transfer/', {
+      property: propertyId,
+      to_user_email: toUserEmail,
+    });
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * Get all pending ownership transfers initiated by the current user
+ * @returns {Promise} Array of OwnershipTransfer objects
+ */
+export const getPendingTransfers = async () => {
+  try {
+    const response = await axios.get('/api/ownership-transfer/');
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * Cancel a pending ownership transfer
+ * @param {number} transferId - ID of the transfer to cancel
+ * @returns {Promise} Response from the API
+ */
+export const cancelTransfer = async (transferId) => {
+  try {
+    const response = await axios.post(`/api/ownership-transfer/${transferId}/cancel/`);
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * Dismiss a completed/cancelled/expired ownership transfer (soft-delete via DELETE)
+ * @param {number} transferId - ID of the transfer to dismiss
+ * @returns {Promise} Response from the API
+ */
+export const dismissTransfer = async (transferId) => {
+  try {
+    await axios.delete(`/api/ownership-transfer/${transferId}/`);
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * Confirm an ownership transfer using the token from the confirmation email
+ * @param {string} token - The confirmation token from the email link
+ * @returns {Promise} Response from the API
+ */
+export const confirmTransfer = async (token) => {
+  try {
+    const response = await axios.get(`/api/ownership-transfer/confirm/${token}/`);
     return response.data;
   } catch (error) {
     throw error;

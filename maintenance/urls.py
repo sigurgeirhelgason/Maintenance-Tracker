@@ -4,6 +4,7 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from .views import (
     PropertyViewSet, AreaViewSet, MaintenanceTaskViewSet,
     VendorViewSet, AttachmentViewSet, TaskTypeViewSet, DataShareViewSet,
+    OwnershipTransferViewSet,
     register, login, get_current_user, export_datapack, import_datapack,
     get_user_settings, update_user_profile, change_password, lookup_postal_code
 )
@@ -16,8 +17,16 @@ router.register(r'tasks', MaintenanceTaskViewSet, basename='maintenancetask')
 router.register(r'vendors', VendorViewSet, basename='vendor')
 router.register(r'attachments', AttachmentViewSet, basename='attachment')
 router.register(r'datashare', DataShareViewSet, basename='datashare')
+router.register(r'ownership-transfer', OwnershipTransferViewSet, basename='ownership-transfer')
 
 urlpatterns = [
+    # Ownership transfer token confirmation — must come before router.urls so the
+    # uuid-typed path takes priority over the router's <pk> pattern.
+    path(
+        'ownership-transfer/confirm/<uuid:token>/',
+        OwnershipTransferViewSet.as_view({'get': 'confirm'}),
+        name='ownership-transfer-confirm',
+    ),
     # Authentication endpoints
     path('auth/login/', login, name='login'),
     path('auth/register/', register, name='register'),

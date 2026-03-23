@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate
-from .models import Property, Area, MaintenanceTask, TaskType, Vendor, Attachment, UserProfile, DataShare, UserVendorPreference
+from .models import Property, Area, MaintenanceTask, TaskType, Vendor, Attachment, UserProfile, DataShare, UserVendorPreference, OwnershipTransfer
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
     """Registration serializer - users register with email and password"""
@@ -402,3 +402,66 @@ class CreateDataShareSerializer(serializers.ModelSerializer):
         instance.permissions = validated_data.get('permissions', instance.permissions)
         instance.save()
         return instance
+
+
+class OwnershipTransferSerializer(serializers.ModelSerializer):
+    """Read-only serializer for OwnershipTransfer — used in list and create responses."""
+    property_name = serializers.CharField(source='property.name', read_only=True)
+    from_user_email = serializers.CharField(source='from_user.email', read_only=True)
+    from_user_username = serializers.CharField(source='from_user.username', read_only=True)
+    to_user_email = serializers.CharField(source='to_user.email', read_only=True)
+    to_user_username = serializers.CharField(source='to_user.username', read_only=True)
+
+    class Meta:
+        model = OwnershipTransfer
+        fields = [
+            'id',
+            'property',
+            'property_name',
+            'from_user',
+            'from_user_email',
+            'from_user_username',
+            'to_user',
+            'to_user_email',
+            'to_user_username',
+            'token',
+            'status',
+            'created_at',
+            'expires_at',
+        ]
+        read_only_fields = fields
+
+
+class CreateOwnershipTransferSerializer(serializers.Serializer):
+    """Write serializer for initiating an ownership transfer."""
+    property = serializers.PrimaryKeyRelatedField(queryset=Property.objects.all())
+    to_user_email = serializers.EmailField()
+
+    def validate_to_user_email(self, value):
+        try:
+            User.objects.get(email=value)
+        except User.DoesNotExist:
+            raise serializers.ValidationError(
+                f"No registered user found with email '{value}'."
+            )
+        return value
+
+    def validate(self, data):
+        request_user = self.context['request'].user
+        to_email = data.get('to_user_email')
+        property_obj = data.get('property')
+
+        # Cannot transfer to yourself
+        if request_user.email == to_email:
+            raise serializers.ValidationError(
+                "You cannot transfer a property to yourself."
+            )
+
+        # Requesting user must be the direct owner of the property.
+        # DataShare (read-write access) does not grant the right to transfer ownership.
+        if property_obj and property_obj.user != request_user:
+            raise serializers.ValidationError(
+                "Only the property owner can transfer ownership."
+            )
+
+        return data

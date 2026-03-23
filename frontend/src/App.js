@@ -19,6 +19,7 @@ import TaskTypes from './components/TaskTypes';
 import Reports from './components/Reports';
 import Settings from './components/Settings';
 import DataSharing from './components/DataSharing';
+import ConfirmTransfer from './components/ConfirmTransfer';
 import Login from './components/Login';
 import Register from './components/Register';
 
@@ -154,6 +155,7 @@ function AppContent() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/confirm-transfer/:token" element={<ConfirmTransfer />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     );
@@ -187,6 +189,7 @@ function AppContent() {
             <Route path="/reports/:reportType" element={<Reports />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/data-sharing" element={<DataSharing />} />
+            <Route path="/confirm-transfer/:token" element={<ConfirmTransfer />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Box>

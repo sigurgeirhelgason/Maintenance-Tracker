@@ -294,9 +294,58 @@ class WritePermissionTest(TestCase):
         share = DataShare.objects.get(owner=self.user1, shared_with=self.user2)
         share.permissions['properties'] = 'rw'
         share.save()
-        
+
         self.client.force_authenticate(user=self.user2)
         data = {'name': 'Updated Property'}
         response = self.client.patch(f'/api/properties/{self.prop1.id}/', data)
         # The update should be allowed
         self.assertNotEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class ShareRevocationTest(TestCase):
+    """Test that revoking a DataShare immediately removes access"""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.owner = User.objects.create_user(
+            username='owner', email='owner@example.com', password='testpass123'
+        )
+        self.shared_user = User.objects.create_user(
+            username='shared', email='shared@example.com', password='testpass123'
+        )
+        self.prop = Property.objects.create(
+            name='Shared House', user=self.owner, address='123 Main St'
+        )
+        self.share = DataShare.objects.create(owner=self.owner, shared_with=self.shared_user)
+
+    def test_shared_user_sees_property_before_revocation(self):
+        """Shared user can see the property while the share is active"""
+        self.client.force_authenticate(user=self.shared_user)
+        response = self.client.get('/api/properties/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        prop_ids = [p['id'] for p in response.data]
+        self.assertIn(self.prop.id, prop_ids)
+
+    def test_shared_user_loses_access_after_share_deleted(self):
+        """Shared user can no longer see the property after the share is deleted"""
+        self.share.delete()
+
+        self.client.force_authenticate(user=self.shared_user)
+        response = self.client.get('/api/properties/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        prop_ids = [p['id'] for p in response.data]
+        self.assertNotIn(self.prop.id, prop_ids)
+
+    def test_owner_deletes_share_via_api_revokes_access(self):
+        """Deleting a DataShare via the API immediately revokes the shared user's access"""
+        # Owner deletes the share through the API
+        self.client.force_authenticate(user=self.owner)
+        delete_response = self.client.delete(f'/api/datashare/{self.share.id}/')
+        self.assertEqual(delete_response.status_code, status.HTTP_204_NO_CONTENT)
+
+        # Shared user now fetches properties — should no longer see the shared property
+        self.client.force_authenticate(user=self.shared_user)
+        response = self.client.get('/api/properties/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        prop_ids = [p['id'] for p in response.data]
+        self.assertNotIn(self.prop.id, prop_ids)
